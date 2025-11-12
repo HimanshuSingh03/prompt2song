@@ -18,17 +18,22 @@
 \usepackage{inconsolata}
 \usepackage{graphicx}
 
+\usepackage{tabularx}
+
 % If the title and author information does not fit in the area allocated, uncomment the following
 %
 %\setlength\titlebox{<dim>}
 %
 % and set <dim> to something 5cm or larger.
 
-\title{Group X Progress Report:\\My Group's Project Name}
+\title{Group 30 Progress Report:\\Prompt-Driven Song Recommendation via Lyric + Acoustic Modeling}
 
 
-\author{First Author, Second Author, Third Author \\
-  \texttt{\{macid1,macid2,macid3\}@mcmaster.ca} }
+\author{
+  Matthew Mark, Himanshu Singh, Muhammad Umar Khan \\
+  \texttt{\{markm4,singh41,khanm417\}@mcmaster.ca} \\
+  \href{https://github.com/HimanshuSingh03/prompt2song}{\textbf{GitHub Link}}
+}
 
 %\author{
 %  \textbf{First Author\textsuperscript{1}},
@@ -75,110 +80,235 @@
 
 \section{Introduction}
 
-Here, write a brief introduction to the problem you are solving. This can be adapted from your problem description and motivation from the original proposal. This should be around 0.25-0.5 pages.
+Music recommendation systems have become a key part of how people discover songs, but most of them rely on user behavior patterns or basic metadata like genre and artist. While these methods work for predicting general listening preferences, they often fail to understand the emotional meaning behind what a user actually wants to hear. A person might search for a song by describing how they feel, using natural language such as ``I’m feeling anxious but hopeful'' or ``I just lost someone close to me,'' but current systems are not designed to interpret that kind of emotional input.
+
+Our goal is to close that gap by creating a recommendation system that can understand free text prompts and connect them to music that matches the user’s emotional state. This project focuses on linking the emotion expressed in a user’s language to the emotional tone of songs, using both lyrical meaning and acoustic qualities to guide selection. The motivation is to make recommendations more expressive, personal, and context aware, so that the system can respond to how a listener feels rather than just what they have played before. This type of emotion based recommendation has potential uses beyond entertainment, including therapeutic music selection and adaptive wellness tools that respond to a person’s mood in real time.
 
 \section{Related Work}
 
-Here, talk about the related work you encountered for your approach. Cite at least 5 references. Refer to item 2. No one has done exactly your task? Write about the most similar thing you can find. This should be around 0.25-0.5 pages.
+Although no one has built a system that performs true free text to music emotion matching, a few key research areas overlap with what we are doing. These include emotion recognition in text, music emotion recognition (MER), and affective recommendation systems.
+
+Early work on text emotion relied on hand crafted lexical resources. \citet{mohammad2013} developed the NRC Emotion Lexicon, which mapped words to emotional categories and became a foundation for early affective NLP systems. As deep learning evolved, transformer models like BERT \citep{devlin2019bert} and its distilled version DistilBERT \citep{sanh2019distilbert} replaced static word lists with context aware embeddings that capture emotional tone from sentence structure rather than individual tokens.
+
+In the music domain, \citet{yang2012musicemotion} provided one of the first large-scale reviews of MER methods, describing both lyric-based and acoustic-feature-based techniques. Later work such as \citet{huang2022multimodal} combined these modalities using multimodal neural networks to classify song emotion. However, these systems still operate on fixed categorical labels (e.g., happy, sad, angry), effectively treating the task as a one-hot classification problem. \citet{ferwerda2017playlist} explored mood and personality driven recommendation, but still relied on predefined mood tags instead of natural-language understanding.
+
+Our project builds on these foundations by linking the emotional semantics expressed in text to the emotional tone embedded within song lyrics and acoustic features, aiming for a recommendation framework that interprets free-form language rather than categorical mood tags.
 
 \section{Dataset}
 
-You should write about your dataset here, following the guidelines regarding item 1. This section may be 0.5-1 pages. Depending on your specific dataset, you may want to include subsections for the preprocessing, annotation, etc.
+To train our emotion model, we used the Emotions Dataset for NLP \citep{govi2020emotions}, which contains short text snippets labeled across six emotion categories: anger, fear, joy, love, sadness, and surprise. Each example follows a simple semicolon-separated \texttt{text;label} format, making it straightforward to preprocess and fine-tune on transformer-based architectures. This dataset provided the foundation for developing our emotion embedder model, allowing the network to learn how natural language expresses affective states.
 
-\section{Features}
+For the music data, we combined two public Kaggle datasets: the Spotify Most Popular Songs Dataset \citep{pancholi2023spotify} and the Audio Features and Lyrics of Spotify Songs Dataset \citep{muhammad2023audiofeatures}. The first dataset contains around 1,000 of Spotify’s most popular tracks, providing lyric and audio feature data for highly streamed, well-known songs. The second dataset is much larger, with approximately 18,000 songs that span a broader range of genres and include both lyrics and audio features. By using both datasets, we combined the popularity and consistency of mainstream music with the diversity and emotional range of a wider song collection.
 
-Describe any features you used for your model, or how your data was input to your model. Are you doing feature engineering or feature selection? Are you learning embeddings? Is it all part of one neural network? Refer to item 2. This may range from 0.25 pages to 0.5 pages.
+During preprocessing, we aligned both datasets by matching song titles and artist names and removed duplicates or incomplete entries. All audio feature values, such as energy, danceability, and valence, were already normalized between 0 and 1, so no further scaling was needed. The result was a unified dataset where each song contains both its lyrics and corresponding normalized acoustic attributes.
+
+% ---- TABLE: Summary of datasets used in the project ----
+\begin{table}[h!]
+\centering
+\small
+\begin{tabularx}{\columnwidth}{l X}
+\hline
+\textbf{Dataset} & \textbf{Description} \\
+\hline
+Emotions Dataset for NLP & 20k text samples labeled with 6 emotions; cleaned and split into train/val/test sets. \\
+Spotify Songs Metadata & $\sim$1k songs with lyrics and audio features (danceability, energy, valence, etc.). \\
+Spotify Songs Dataset & $\sim$18k songs preprocessed using the same pipeline, source-tagged for tracking. \\
+Merged Dataset & 18,247 total entries with unified text and numeric attributes. \\
+\hline
+\end{tabularx}
+\caption{Summary of datasets used in the project.}
+\label{tab:dataset-summary}
+\end{table}
+% ---- END TABLE ----
 
 \section{Implementation}
 
-Describe your model and implementation here. Refer to item 4. This may take around a page.
+\subsection{Model Architecture and Training}
+
+Our approach builds on previous emotion recognition research but takes it a step further by combining emotional understanding with user preference learning in a two-phase model. The first phase focuses on interpreting the user’s emotional intent from text and mapping both their prompt and song lyrics into the same emotion space for comparison. This gives us a structured way to find songs that share a similar emotional tone. The second phase builds on top of that by introducing reinforcement learning, where the model starts adapting to each user through direct feedback. By combining these two stages, the system moves from simply matching lyrical emotion to actually learning what audio features each listener prefers for their prompt. The result is a recommendation process that feels both emotionally aligned and personally tuned to the user’s mood and taste.
+
+% ---- FIGURE: Phase 1 - Text-based Emotion Matching for Lyrics ----
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/"figure 1.png"}
+    \caption{Phase 1 - Text-based Emotion Matching for Lyrics.}
+    \label{fig:phase1}
+\end{figure}
+% ---- END FIGURE ----
+
+In Phase~1, the model learns and compares emotional meaning between user prompts and song lyrics using a fine-tuned transformer. It takes two text inputs: the user’s emotional prompt (\texttt{t\_prompt}) and song lyrics (\texttt{lyrics}) from the dataset. Both are tokenized through the \texttt{DistilBERT-base-uncased} tokenizer, which converts text into token IDs and attention masks with truncation and fixed-length padding to maintain consistent input dimensions. 
+
+DistilBERT \citep{sanh2019distilbert} was chosen as the backbone due to its strong balance of speed and representational quality, inheriting much of BERT’s capability \citep{devlin2019bert} while being smaller and more efficient. The maximum sequence length of 128 tokens was selected to capture the context of short lyrics and text prompts while keeping training efficient. In future iterations, we may increase this limit or use larger models (e.g., BERT-large) to capture more nuanced emotional context.
+
+Training was conducted using the Hugging Face \texttt{Trainer} API with cross-entropy loss for multi-class emotion classification. We used the AdamW optimizer with a learning rate of $2\times10^{-5}$ and weight decay of 0.01 to prevent overfitting. The model trained for eight epochs with batch sizes of 16 (training) and 32 (evaluation), employing early stopping (patience = 2) and saving the best checkpoint by macro-F1 performance.
+
+After training, the classification head was removed and the encoder reused to generate 768-dimensional emotion embeddings for both lyrics and prompts. These embeddings form a shared emotion space linking what the user expresses to the emotional tone of songs.
+
+% ---- FIGURE: Phase 2 - Reinforcement-learning Contextual Bandit Refinement ----
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/"figure 2.png"}
+    \caption{Phase 2 - Reinforcement-learning Contextual Bandit Refinement.}
+    \label{fig:phase2}
+\end{figure}
+% ---- END FIGURE ----
+
+Phase 2 extends this system using a reinforcement-learning contextual bandit to adapt recommendations through user feedback. Once Phase 1 retrieves top-$N$ emotionally aligned songs, the system presents two candidates (\textit{A} and \textit{B}) and asks which the user prefers. The model then updates a user preference vector using a logistic-style gradient rule based on differences in song features such as energy, valence, and danceability.  
+Users can optionally select “reason tags” (e.g., \textit{more energetic}, \textit{less vocals}) that guide how the model adjusts feature weights. Over time, this preference vector evolves to reflect individual taste while preserving emotional coherence.
+
+Although Phase 2 is not yet implemented, its architecture is defined to integrate seamlessly with Phase 1. The plan is to simulate user interactions and track performance improvements as the model learns personalized mappings from emotion to sound.
+
+\subsection{Baseline Comparison}
+
+To evaluate our model’s improvement, we compared it against a majority-class baseline that always predicts the most frequent label (“joy”). This baseline achieved roughly 35\% accuracy and 0.09 macro F1, showing the dataset’s class imbalance.  
+In contrast, our fine-tuned DistilBERT model achieved 93\% accuracy and 0.88 macro F1—representing a 2.5× improvement in accuracy and nearly a 10× improvement in macro F1.  
+These results confirm the model’s ability to capture emotional tone and generalize effectively to unseen text.
 
 \section{Results and Evaluation}
 
-How are you evaluating your model? What results do you have so far? What are your baselines? Refer to item 5. This may take around 0.5 pages.
+\subsection{Data Splits and Reproducibility}
+
+The NLP dataset was divided into fixed training, validation, and test splits of 16,000, 2,000, and 2,000 examples respectively. The emotion distribution across these splits is moderately imbalanced, with \textit{joy} and \textit{sadness} being the most common and \textit{surprise} the least frequent. Because of this imbalance, macro-F1 was chosen as the primary evaluation metric, supported by accuracy and weighted-F1 for reference.
+
+% ---- FIGURE: Visual of Distribution within Training, Validation, and Testing Datasets ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 3.png"}
+  \caption{Visual of Distribution within Training, Validation, and Testing Datasets}
+  \label{fig:TVV_Distribution}
+\end{figure}
+% ---- END FIGURE ----
+
+We used fixed splits instead of k-fold cross-validation, since fine-tuning a large pre-trained model benefits more from a stable validation set for checkpoint selection. Early stopping was applied to prevent overfitting, and the final model checkpoint corresponded to the highest validation macro-F1 score.
+
+\subsection{Validation Protocol During Training}
+
+Training was managed using the Hugging Face \texttt{Trainer}, evaluating the model after each epoch. Early stopping with a patience of two epochs halted training once validation metrics plateaued. After training, the checkpoint with the best macro-F1 score on validation was restored for all subsequent evaluation. We also log training and validation losses and metrics at each epoch to monitor convergence.
+
+% ---- FIGURE: Training and Validation Loss Curves Across Epochs ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 4.png"}
+  \caption{Training and Validation Loss Curves Across Epochs}
+  \label{fig:trainValCurve}
+\end{figure}
+% ---- END FIGURE ----
+
+After model selection, we perform a single evaluation on the held-out test set using the best checkpoint. This provides a reliable estimate of generalization to unseen data. No training or hyperparameter decisions are influenced by the test results.
+
+\subsection{Evaluation Metrics and Results}
+
+We report multiple metrics to capture overall and class-specific performance:
+
+\begin{itemize}
+    \item \textbf{Accuracy:} Proportion of correctly predicted examples.
+    \item \textbf{Macro-F1:} Unweighted mean of F1 scores across all classes; our primary selection metric, as it treats each emotion equally.
+    \item \textbf{Weighted-F1:} Class-frequency-weighted F1 score, accounting for imbalance.
+\end{itemize}
+
+The model achieves strong overall performance on the test set, with 93\% accuracy, macro-F1 = 0.88, and weighted-F1 = 0.93. Table 2 summarizes the detailed per-class metrics.
+
+% ---- TABLE: Per-class performance on the test set ----
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{lcccc}
+\hline
+\textbf{Emotion} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Samples} \\
+\hline
+Anger & 0.93 & 0.91 & 0.92 & 275 \\
+Fear & 0.88 & 0.92 & 0.90 & 224 \\
+Joy & 0.94 & 0.95 & 0.95 & 695 \\
+Love & 0.83 & 0.81 & 0.82 & 159 \\
+Sadness & 0.96 & 0.97 & 0.96 & 581 \\
+Surprise & 0.82 & 0.68 & 0.74 & 66 \\
+\hline
+\textbf{Accuracy} &
+\multicolumn{3}{c}{0.93 (2,000 samples)} &
+\\
+\textbf{Macro Avg} & 0.89 & 0.87 & 0.88 & \\
+\textbf{Weighted Avg} & 0.93 & 0.93 & 0.93 & \\
+\hline
+\end{tabular}
+\caption{Per-class performance on the test set.}
+\label{tab:class-performance}
+\end{table}
+% ---- END TABLE ----
+
+The results indicate that the model performs particularly well on \textit{joy} and \textit{sadness}, while \textit{surprise} remains the most challenging category due to its limited representation. The slightly lower recall for \textit{surprise} suggests occasional confusion with semantically similar emotions such as \textit{fear} or \textit{love}.
+
+\subsection{Confusion Matrix Analysis}
+
+The confusion matrix (Figure~\ref{fig:confusion-matrix}) shows strong diagonal dominance, indicating that the model accurately classifies most samples across all emotion categories. Misclassifications are primarily concentrated between \textit{love} and \textit{joy} (both positive affective states) and between \textit{surprise} and \textit{fear}, consistent with their semantic proximity. Despite these overlaps, the model maintains high overall precision and recall across categories, confirming robust generalization.
+
+% ---- FIGURE: Confusion Matrix (Test) ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 5.png"}
+  \caption{Confusion Matrix (Test)}
+  \label{fig:confusion-matrix}
+\end{figure}
+% ---- END FIGURE ----
+
+\subsection{Visual Representation Checks}
+
+To complement quantitative metrics, we examined the semantic quality of the model’s learned embeddings by comparing vector representations of different emotion prompts. Each prompt was encoded using the fine-tuned model, and pairs of vectors were compared across embedding dimensions using cosine similarity to assess how the model differentiates or aligns emotional meanings.
+
+% ---- FIGURE: Contrasting prompts embedding comparison ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 6.png"}
+  \caption{Compares two contrasting prompts (Calm + Hopeful vs. Anxious + Hopeless), showing opposing component patterns and a low cosine similarity of 0.161, indicating that the model encodes these as distinct emotional states.}
+  \label{fig:embed_comp1}
+\end{figure}
+% ---- END FIGURE ----
+
+% ---- FIGURE: Similar prompts embedding comparison ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 7.png"}
+  \caption{Compares two semantically similar prompts (Calm + Hopeful vs. Peaceful + Reassuring), which display highly aligned patterns with a cosine similarity of 0.941, suggesting that the model clusters related emotions close together in vector space.}
+  \label{fig:embed_comp2}
+\end{figure}
+% ---- END FIGURE ----
+
+To further assess the structure of the learned emotion space, we projected the 768-dimensional embeddings of text and lyric inputs into two dimensions using t-SNE (Figure~\ref{fig:t_sne}), which is a common nonlinear dimensionality reduction method commonly used for visualizing high-dimensional representations.
+
+% ---- FIGURE: t-SNE visualization ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 8.png"}
+  \caption{Visual Separation of Emotional Embedding Clusters}
+  \label{fig:t_sne}
+\end{figure}
+% ---- END FIGURE ----
+
+Importantly, prompt embeddings (user text inputs) and lyric embeddings (song data) occupy overlapping regions, demonstrating that the shared encoder captures a consistent semantic space across different input sources. Although t-SNE can exaggerate cluster overlap due to compression of global distances, the clear local grouping confirms that the model’s embeddings are emotionally and semantically coherent.
+
+Overall, the evaluation confirms that the model encodes emotional meaning in text and lyrics, forming the foundation for the next stage of the project. These embeddings will serve as the starting point for Phase 2, where a reinforcement learning contextual-bandit model will refine recommendations based on user feedback and preferred audio features.
 
 \section{Feedback and Plans}
 
-Write about your plans for the remainder of the project. This should include a discussion of the feedback you received from your TA, and how you plan to improve your approach. Reflect on your implementation and areas for improvement. Refer to item 6. This may be around 0.5 pages.
+Our original model design, shown in Figure~\ref{fig:original_proposal}, combined two main components: a Text Emotion Embedder and a Song Features Emotion Embedder, joined through a Gated Fusion Model. The goal was to fuse lyrical emotion with acoustic attributes such as danceability, energy, and loudness into a single emotional representation of each song. In theory, this approach would connect both the lyrical meaning and the physical sound of music to a user’s emotional prompt.
 
-\section{Template Notes}
-
-You can remove this section or comment it out, as it only contains instructions for how to use this template. You may use subsections in your document as you find appropriate.
-
-\subsection{Tables and figures}
-
-See Table~\ref{citation-guide} for an example of a table and its caption.
-See Figure~\ref{fig:experiments} for an example of a figure and its caption.
-
-
-\begin{figure}[t]
-  \includegraphics[width=\columnwidth]{example-image-golden}
-  \caption{A figure with a caption that runs for more than one line.
-    Example image is usually available through the \texttt{mwe} package
-    without even mentioning it in the preamble.}
-  \label{fig:experiments}
-\end{figure}
-
-\begin{figure*}[t]
-  \includegraphics[width=0.48\linewidth]{example-image-a} \hfill
-  \includegraphics[width=0.48\linewidth]{example-image-b}
-  \caption {A minimal working example to demonstrate how to place
-    two images side-by-side.}
-\end{figure*}
-
-
-\subsection{Citations}
-
-\begin{table*}
+% ---- FIGURE: Original Proposal for a Gated Fusion Model ----
+\begin{figure}[h!]
   \centering
-  \begin{tabular}{lll}
-    \hline
-    \textbf{Output}           & \textbf{natbib command} & \textbf{ACL only command} \\
-    \hline
-    \citep{Gusfield:97}       & \verb|\citep|           &                           \\
-    \citealp{Gusfield:97}     & \verb|\citealp|         &                           \\
-    \citet{Gusfield:97}       & \verb|\citet|           &                           \\
-    \citeyearpar{Gusfield:97} & \verb|\citeyearpar|     &                           \\
-    \citeposs{Gusfield:97}    &                         & \verb|\citeposs|          \\
-    \hline
-  \end{tabular}
-  \caption{\label{citation-guide}
-    Citation commands supported by the style file.
-  }
-\end{table*}
+  \includegraphics[width=\columnwidth]{figures/"figure 9.png"}
+  \caption{Original Proposal for a Gated Fusion Model}
+  \label{fig:original_proposal}
+\end{figure}
+% ---- END FIGURE ----
 
-Table~\ref{citation-guide} shows the syntax supported by the style files.
-We encourage you to use the natbib styles.
-You can use the command \verb|\citet| (cite in text) to get ``author (year)'' citations, like this citation to a paper by \citet{Gusfield:97}.
-You can use the command \verb|\citep| (cite in parentheses) to get ``(author, year)'' citations \citep{Gusfield:97}.
-You can use the command \verb|\citealp| (alternative cite without parentheses) to get ``author, year'' citations, which is useful for using citations within parentheses (e.g. \citealp{Gusfield:97}).
+During our feedback session, our TA with experience in emotion extraction explained that this fusion model would be extremely difficult to evaluate in practice. The acoustic feature branch on the right side of the architecture (Figure~\ref{fig:original_proposal}) does not directly correlate to emotion in a consistent or measurable way. While values such as tempo or energy describe the sound of a song, they do not reliably represent emotional tone. Because of this, there was no clear method for determining whether a fused output vector represented a good or bad emotional match for the user. Measuring performance would have required subjective evaluation or manual labeling, which was not feasible within our project timeline.
 
-\subsection{References}
+Based on this feedback, we simplified the system into a two-phase model that reuses the DistilBERT encoder from our original architecture. This encoder was already trained to extract emotional tone from text and lyrics, making it a strong foundation for Phase 1, which now focuses solely on generating consistent and quantifiable lyric embeddings. In Phase 2, which we are currently developing, a reinforcement learning contextual bandit will refine recommendations using user feedback. Instead of fusing acoustic features directly, the model will show users A versus B song comparisons and gather preference inputs such as more energetic or less vocals. These responses will guide the model in learning which acoustic features best match individual preferences while maintaining the emotional alignment provided by the reused DistilBERT encoder.
 
-\nocite{Ando2005,andrew2007scalable,rasooli-tetrault-2015}
-
-Many websites where you can find academic papers also allow you to export a bib file for citation or bib formatted entry. Copy this into the \texttt{custom.bib} and you will be able to cite the paper in the \LaTeX{}. You can remove the example entries.
-
-\subsection{Equations}
-
-An example equation is shown below:
-\begin{equation}
-  \label{eq:example}
-  A = \pi r^2
-\end{equation}
-
-Labels for equation numbers, sections, subsections, figures and tables
-are all defined with the \verb|\label{label}| command and cross references
-to them are made with the \verb|\ref{label}| command.
-This an example cross-reference to Equation~\ref{eq:example}. You can also write equations inline, like this: $A=\pi r^2$.
-
-
-% \section*{Limitations}
+This redesign makes the project more practical and easier to evaluate. Rather than attempting to measure emotional correctness mathematically, we will use user-based metrics such as how many recommended songs match what users report liking. The improvement in preference accuracy over time will provide a clear way to measure learning progress. For the remainder of the project, our plan is to complete the reinforcement learning stage, test the model using simulated user interactions, and analyze how well it adapts to feedback while preserving the emotional consistency of its recommendations.
 
 \section*{Team Contributions}
 
-Write in this section a few sentences describing the contributions of each team member. What did each member work on? Refer to item 7.
-
+All team members collaborated closely across all stages of the project, from data preprocessing to model implementation and evaluation. Himanshu Singh focused primarily on data cleaning and pipeline setup, ensuring the merged Spotify datasets were ready for modeling. Muhammad Umar Khan led the integration of the DistilBERT-based emotion model and coordinated system design. Matthew Mark contributed to evaluation design, performance analysis, and visualization of results. Each member participated in writing the report and refining both preprocessing and modeling components through regular joint meetings and shared development sessions.
 % Bibliography entries for the entire Anthology, followed by custom entries
 %\bibliography{custom,anthology-overleaf-1,anthology-overleaf-2}
 
