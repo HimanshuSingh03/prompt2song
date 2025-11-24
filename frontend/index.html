@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>prompt2song – local frontend</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero hero--simple">
+        <h1 class="hero__title">Prompt2Song</h1>
+      </header>
+
+      <section class="panel">
+        <form id="promptForm" class="prompt-form">
+          <div class="field">
+            <label for="promptInput">Prompt</label>
+            <textarea
+              id="promptInput"
+              name="prompt"
+              rows="3"
+              placeholder="e.g. moody synthwave for a late-night drive"
+              required
+            ></textarea>
+          </div>
+          <div class="field-inline">
+            <div class="field">
+              <label for="topKInput">Top K (optional)</label>
+              <input id="topKInput" name="top_k" type="number" min="1" placeholder="uses config default" />
+            </div>
+            <button type="submit" id="startBtn">Start run</button>
+          </div>
+          <p class="hint">
+            The backend will reuse your existing config, log CLI-style output, and write Phase 1/2 CSVs to
+            <code>outputs/</code>.
+          </p>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>CLI transcript</h2>
+          <span class="status" id="statusBadge">Idle</span>
+        </div>
+        <pre id="logOutput" class="log-output">Submit a prompt to stream logs here.</pre>
+      </section>
+
+      <section class="panel" id="questionSection" hidden>
+        <div class="panel__header">
+          <h2>RLHF preference check</h2>
+          <span id="questionCounter" class="status"></span>
+        </div>
+        <div class="question-grid">
+          <article class="song-card" id="songACard">
+            <div class="card-head">
+              <p class="label">Option A</p>
+              <p class="song-title" id="songATitle"></p>
+              <p class="song-artist" id="songAArtist"></p>
+            </div>
+            <div class="embed" id="songAEmbed"></div>
+          </article>
+          <article class="song-card" id="songBCard">
+            <div class="card-head">
+              <p class="label">Option B</p>
+              <p class="song-title" id="songBTitle"></p>
+              <p class="song-artist" id="songBArtist"></p>
+            </div>
+            <div class="embed" id="songBEmbed"></div>
+          </article>
+        </div>
+        <div class="actions">
+          <button class="ghost" data-choice="skip" id="skipBtn">Skip</button>
+          <div class="action-group">
+            <button data-choice="a" id="chooseABtn">Choose A</button>
+            <button data-choice="b" id="chooseBBtn">Choose B</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="resultsSection" hidden>
+        <div class="panel__header">
+          <h2>Final recommendations</h2>
+          <span class="status success">CSV saved</span>
+        </div>
+        <p class="hint">
+          The recommender wrote the final list to <code id="csvPath"></code>. Showing the contents below.
+        </p>
+        <div class="table-wrapper">
+          <table id="resultsTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

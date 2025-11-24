@@ -1,16 +1,20 @@
+Metadata-Version: 2.4
+Name: prompt2song
+Version: 0.1.0
+Summary: Prompt-to-song API and utilities
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: pyyaml
+Requires-Dist: torch
+Requires-Dist: transformers
+Provides-Extra: dev
+Requires-Dist: ipykernel; extra == "dev"
+
 # Prompt2Song Service
 
 A lightweight package that serves prompt-to-song recommendations locally using the artifacts already produced by the notebooks. It loads the DistilBERT text encoder, lyric embeddings, and song metadata to return the top-k matches for any text prompt, with an optional popularity filter. There is no HTTP server—use the CLI or import it as a library.
-
-
-## Local web host
-Prefer a browser UI that mirrors the CLI (including RLHF A/B questions with Spotify embeds and the final `recs_rlhf.csv` contents)? A lightweight host lives in `frontend/` at the repo root.
-
-1. Install the backend as above (`pip install -e prompt2song_service` so the imports resolve).
-2. From the repo root, run: `python frontend/server.py`
-3. Open http://localhost:8000. Submit a prompt, answer the A/B cards, and the page will stream CLI-style logs and show the saved CSV from `outputs/`.
-
-The server reuses your existing `config.yaml` paths and writes Phase 1/2 CSVs to the configured output directory.
 
 ## Layout
 - `config.yaml` – all paths and runtime settings (paths are resolved relative to this file)
@@ -38,7 +42,6 @@ for song in songs:
     print(song["name"], song["score"])
 print("CSV saved to", csv_path)
 ```
-
 
 ## Configuration notes
 - `paths` should point to the existing notebook artifacts (text encoder, lyric embeddings, metadata)
