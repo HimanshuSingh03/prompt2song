@@ -1,0 +1,14 @@
+paths:
+  text_encoder_dir: ../artifacts/text_encoder/hf_model
+  label_mapping: ../artifacts/text_encoder/label2id.json
+  lyrics_embeddings: ../artifacts/text_encoder/lyrics_retrieval/lyrics_embeddings.npy
+  lyrics_metadata: ../artifacts/text_encoder/lyrics_retrieval/lyrics_metadata.jsonl
+  output_dir: ../outputs
+retrieval:
+  top_k: 10
+  device: cpu
+  normalize_embeddings: true
+  use_popularity_threshold: true
+  min_track_popularity: 70
+output:
+  csv_filename: recommendations.csv

@@ -1,2 +1,20 @@
+# Project artifacts
 /artifacts
 /datasets
+/outputs
+
+# Environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*/__pycache__/*
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors/OS cruft
+.DS_Store
+.vscode/
