@@ -18,7 +18,7 @@ Use the built-in helper to write a CSV directly:
 ```bash
 python -m prompt2song.cli "moody late-night pop" --k 10 --filename recommendations.csv
 ```
-Results include title, artist, emotion label, lyrics, score, track popularity, and the feature vector per song (album is omitted from the CSV export). CSVs are written under `paths.output_dir` from `config.yaml`.
+Results include title, artist, emotion label, lyrics, score, track popularity, and the feature vector per song (album is omitted from the CSV export). CSVs are written under `paths.output_dir` from `config.yaml`. Phase-specific filenames come from config: `retrieval.output_csv` for Phase 1 and `rlhf.output_csv_base` for RLHF, with a sensible fallback if omitted.
 
 ## Using as a library
 ```python
@@ -32,6 +32,15 @@ print("CSV saved to", csv_path)
 ## Configuration notes
 - `paths` should point to the existing notebook artifacts (text encoder, lyric embeddings, metadata)
 - `retrieval.top_k` is the default k when none is provided
-- `output.csv_filename` sets the default export name; files are written to `paths.output_dir`
+- `retrieval.output_csv` (optional) names the Phase 1 CSV; otherwise a `_p1` suffix is used on the base filename.
+- `output.csv_filename` sets the default export base name when CLI `--filename` is omitted (still used as a fallback)
 - `retrieval.use_popularity_threshold` toggles filtering by the `track_popularity` field in your metadata
 - `retrieval.min_track_popularity` is the minimum allowed popularity when the filter is enabled; entries without `track_popularity` are skipped when the filter is on
+
+## Phase 2 RLHF (optional)
+Set `rlhf.num_rlhf_questions > 0` in `config.yaml` to enable a second-stage, interactive rerank:
+- Phase 1 retrieves a candidate pool sized by the requested/final top-k, then the CLI asks A/B preference questions (up to `num_rlhf_questions`).
+- A per-session preference vector over audio features is learned (with step size `rlhf.learning_rate`) and combined with the base score using `rlhf.preference_weight`.
+- Only the top `rlhf.final_top_k` (or CLI `--k` if provided) songs are returned after reranking; Phase 1 pool size follows the requested top-k (CLI `--k` or `retrieval.top_k`).
+- CSV outputs: Phase 1 writes `retrieval.output_csv` (or `<base>_p1.csv` fallback), and the RLHF-final list writes `rlhf.output_csv_base` (or `<base>_p2.csv` fallback). When RLHF is off, only the Phase 1 file is produced.
+- When `rlhf.num_rlhf_questions == 0`, behavior matches the existing Phase 1 flow aside from respecting the configured final top-k when provided.

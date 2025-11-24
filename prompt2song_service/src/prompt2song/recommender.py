@@ -1,6 +1,7 @@
 import numpy as np
 from .encoder import PromptEncoder
 from .data import SongEmbeddings, SongMetadata
+from .rlhf import FEATURE_KEYS
 
 
 class Prompt2SongRecommender:
@@ -25,30 +26,35 @@ class Prompt2SongRecommender:
         query = vector / np.linalg.norm(vector)
         scores = query @ self.embeddings.normalized.T
         k = top_k or self.default_k
-        sorted_indices = np.argsort(scores)[::-1]
-        indices = []
-        for idx in sorted_indices:
-            if self.use_popularity_threshold:
-                pop = self.metadata.popularity[int(idx)]
-                if pop is None or pop < self.min_track_popularity:
-                    continue
-            indices.append(idx)
-            if len(indices) >= k:
-                break
+        if self.use_popularity_threshold:
+            valid_indices = [
+                i
+                for i, pop in enumerate(self.metadata.popularity)
+                if pop is not None and pop >= self.min_track_popularity
+            ]
+            if not valid_indices:
+                return []
+            subset_scores = scores[valid_indices]
+            sorted_subset = np.argsort(subset_scores)[::-1]
+            sorted_indices = [valid_indices[i] for i in sorted_subset]
+        else:
+            sorted_indices = np.argsort(scores)[::-1]
+        indices = sorted_indices[:k]
         recommendations = []
         for idx in indices:
             meta = self.metadata.by_index(int(idx))
-            recommendations.append(
-                {
-                    "song_id": meta["song_id"],
-                    "name": meta["name"],
-                    "album_name": meta["album_name"],
-                    "artists": meta["artists"],
-                    "emotion_label": meta.get("emotion_label"),
-                    "lyrics": meta["lyrics"],
-                    "track_popularity": meta.get("track_popularity"),
-                    "feature_vector": self.embeddings.vectors[idx].tolist(),
-                    "score": float(scores[idx]),
-                }
-            )
+            rec = {
+                "song_id": meta["song_id"],
+                "name": meta["name"],
+                "album_name": meta["album_name"],
+                "artists": meta["artists"],
+                "emotion_label": meta.get("emotion_label"),
+                "lyrics": meta["lyrics"],
+                "track_popularity": meta.get("track_popularity"),
+                "feature_vector": self.embeddings.vectors[idx].tolist(),
+                "score": float(scores[idx]),
+            }
+            for key in FEATURE_KEYS:
+                rec[key] = meta.get(key)
+            recommendations.append(rec)
         return recommendations

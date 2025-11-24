@@ -1,5 +1,5 @@
 import argparse
-from .service import recommend
+from .service import recommend, settings, resolve_output_filenames
 
 
 def main() -> None:
@@ -13,8 +13,12 @@ def main() -> None:
         help="Optional filename for the CSV (defaults to config output.csv_filename)",
     )
     args = parser.parse_args()
+    phase1_name, phase2_name = resolve_output_filenames(args.filename)
     recommendations, csv_path = recommend(args.prompt, args.k, to_csv=True, filename=args.filename)
-    print(f"Wrote {len(recommendations)} recommendations to {csv_path}")
+    if settings.rlhf.num_rlhf_questions > 0:
+        phase1_path = settings.paths.output_dir / phase1_name
+        print(f"Wrote Phase 1 recommendations to {phase1_path}")
+    print(f"Wrote final recommendations to {csv_path}")
 
 
 if __name__ == "__main__":

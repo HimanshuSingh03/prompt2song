@@ -11,8 +11,8 @@ class RecommendationExporter:
     def to_csv(self, recommendations: list[dict], filename: str | None = None) -> Path:
         target = self.output_dir / (filename or self.default_filename)
         frame = pd.DataFrame(recommendations)
-        # Drop album data for slimmer exports.
-        frame = frame.drop(columns=["album_name"], errors="ignore")
+        # Drop heavy/unneeded columns for slimmer exports.
+        frame = frame.drop(columns=["album_name", "feature_vector"], errors="ignore")
         if "lyrics" in frame.columns:
             cols = [c for c in frame.columns if c != "lyrics"] + ["lyrics"]
             frame = frame[cols]

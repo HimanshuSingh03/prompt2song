@@ -5,10 +5,16 @@ paths:
   lyrics_metadata: ../artifacts/text_encoder/lyrics_retrieval/lyrics_metadata.jsonl
   output_dir: ../outputs
 retrieval:
-  top_k: 10
+  top_k: 100
   device: cpu
   normalize_embeddings: true
-  use_popularity_threshold: true
-  min_track_popularity: 70
-output:
-  csv_filename: recommendations.csv
+  use_popularity_threshold: false
+  min_track_popularity: 80
+  output_csv: recs_retrieval.csv
+rlhf:
+  num_rlhf_questions: 3
+  learning_rate: 0.1
+  preference_weight: 1.0
+  final_top_k: 10
+  output_csv_base: recs_rlhf.csv
+
