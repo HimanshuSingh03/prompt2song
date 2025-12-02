@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import json
 import os
-import random
 import sys
 import threading
 import uuid
@@ -85,7 +84,7 @@ class SessionState:
     candidates: list[dict[str, Any]] = field(default_factory=list)
     feature_vectors: list[np.ndarray] = field(default_factory=list)
     preference_vector: np.ndarray | None = None
-    asked_pairs: set[tuple[int, int]] = field(default_factory=set)
+    asked_pairs: set[int] = field(default_factory=set)
     current_pair: tuple[int, int] | None = None
     phase1_csv: Path | None = None
     final_csv: Path | None = None
@@ -105,7 +104,6 @@ class SessionState:
         self.preference_weight = rlhf_cfg.preference_weight
         self.phase1_name, self.phase2_name = service.resolve_output_filenames(None)
 
-        self.rng = random.Random()
         self.logs.append(f"Prompt: {self.prompt}")
         self.classification = service.classify_prompt(self.prompt)
         if self.classification:
@@ -148,6 +146,16 @@ class SessionState:
         if self.weight_log_path:
             self.logs.append(f"Logging preference vectors to {self.weight_log_path}")
 
+    def _rank_indices(self) -> list[int]:
+        scores: list[tuple[int, float]] = []
+        for idx, (cand, feats) in enumerate(zip(self.candidates, self.feature_vectors)):
+            base = cand.get("score", 0.0)
+            pref = float(self.preference_vector @ feats) if self.preference_vector.size else 0.0
+            final = base + self.preference_weight * pref
+            scores.append((idx, final))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return [idx for idx, _ in scores]
+
     def _max_pairs(self) -> int:
         n = len(self.candidates)
         return n * (n - 1) // 2
@@ -157,25 +165,20 @@ class SessionState:
             return None
         if self.answered >= self.num_questions:
             return None
-        if len(self.asked_pairs) >= self._max_pairs():
+        ranking = self._rank_indices()
+        available = [idx for idx in ranking if idx not in self.asked_pairs]
+        if len(available) < 2:
             return None
 
-        for _ in range(20):
-            a_idx, b_idx = self.rng.sample(range(len(self.candidates)), 2)
-            if a_idx == b_idx:
-                continue
-            if (a_idx, b_idx) in self.asked_pairs or (b_idx, a_idx) in self.asked_pairs:
-                continue
-            self.asked_pairs.add((a_idx, b_idx))
-            self.current_pair = (a_idx, b_idx)
-            question_no = self.answered + 1
-            self.logs.append(
-                f"RLHF question {question_no}/{self.num_questions}: "
-                f"A) {_song_display(self.candidates[a_idx])} | "
-                f"B) {_song_display(self.candidates[b_idx])}"
-            )
-            return self._question_payload(a_idx, b_idx, question_no)
-        return None
+        a_idx, b_idx = available[0], available[1]
+        self.current_pair = (a_idx, b_idx)
+        question_no = self.answered + 1
+        self.logs.append(
+            f"RLHF question {question_no}/{self.num_questions}: "
+            f"A) {_song_display(self.candidates[a_idx])} | "
+            f"B) {_song_display(self.candidates[b_idx])}"
+        )
+        return self._question_payload(a_idx, b_idx, question_no)
 
     def _question_payload(self, a_idx: int, b_idx: int, question_no: int) -> dict[str, Any]:
         def payload_from_idx(idx: int) -> dict[str, Any]:
@@ -217,6 +220,7 @@ class SessionState:
 
         if self.weight_logger and choice in ("a", "b"):
             self.weight_logger.log(self.answered, self.preference_vector)
+        self.asked_pairs.update({a_idx, b_idx})
         self.current_pair = None
 
     def finalize(self) -> list[dict[str, Any]]:

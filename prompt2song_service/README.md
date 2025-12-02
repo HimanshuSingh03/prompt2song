@@ -1,57 +1,75 @@
-# Prompt2Song Service
+# Prompt2Song
 
-A lightweight package that serves prompt-to-song recommendations locally using the artifacts already produced by the notebooks. It loads the DistilBERT text encoder, lyric embeddings, and song metadata to return the top-k matches for any text prompt, with an optional popularity filter. There is no HTTP server—use the CLI or import it as a library.
+Local prompt-to-song recommendation pipeline with optional RLHF reranking. Ships with both a CLI and a lightweight browser UI.
 
+## Prerequisites
+- Python 3.10+
+- Project artifacts available (text encoder, lyric embeddings, metadata). Paths are set in `config.yaml`.
+- From repo root, install the backend:  
+  ```bash
+  pip install -e prompt2song_service
+  ```
+  (Run inside a virtualenv if desired.)
 
-## Local web host
-Prefer a browser UI that mirrors the CLI (including RLHF A/B questions with Spotify embeds and the final `recs_rlhf.csv` contents)? A lightweight host lives in `frontend/` at the repo root.
+## Configure
+`prompt2song_service/config.yaml` defines everything. Key fields:
+- `paths`: `text_encoder_dir`, `label_mapping`, `lyrics_embeddings`, `lyrics_metadata`, `output_dir` (all resolved relative to this file).
+- `retrieval`: `top_k`, `device`, `normalize_embeddings`, optional popularity filter (`use_popularity_threshold`, `min_track_popularity`), optional `output_csv` for Phase 1.
+- `rlhf`: `num_rlhf_questions`, `learning_rate`, `preference_weight`, `final_top_k`, optional `output_csv_base` for the RLHF CSV.
+- `output`: default `csv_filename` fallback.
 
-1. Install the backend as above (`pip install -e prompt2song_service` so the imports resolve).
-2. From the repo root, run: `python frontend/server.py`
-3. Open http://localhost:8000. Submit a prompt, answer the A/B cards, and the page will stream CLI-style logs and show the saved CSV from `outputs/`.
+Override config with `PROMPT2SONG_CONFIG=/path/to/config.yaml` if needed.
 
-The server reuses your existing `config.yaml` paths and writes Phase 1/2 CSVs to the configured output directory.
-
-## Layout
-- `config.yaml` – all paths and runtime settings (paths are resolved relative to this file)
-- `pyproject.toml` – dependencies and package metadata
-- `src/prompt2song/` – implementation (config loader, encoder, data loaders, recommender, CSV exporter, CLI entrypoints)
-
-## Setup
-1. From the repo root: `cd prompt2song_service`
-2. Install the package: `pip install -e .`
-
-Set `PROMPT2SONG_CONFIG` if you want the code to read a different config file than the default `config.yaml` in this folder.
-
-## Quickstart (CLI)
-Use the built-in helper to write a CSV directly:
+## Run: CLI
 ```bash
-python -m prompt2song.cli "moody late-night pop" --k 10 --filename recommendations.csv
+python -m prompt2song.cli "moody late-night pop" --k 15 --filename recs.csv --rlhf-log-dir outputs/rlhf_logs
 ```
-Results include title, artist, emotion label, lyrics, score, track popularity, and the feature vector per song (album is omitted from the CSV export). CSVs are written under `paths.output_dir` from `config.yaml`. Phase-specific filenames come from config: `retrieval.output_csv` for Phase 1 and `rlhf.output_csv_base` for RLHF, with a sensible fallback if omitted.
+Notes:
+- Phase 1 CSV: `retrieval.output_csv` or `<base>_p1.csv` under `paths.output_dir`.
+- Phase 2 CSV (RLHF): `rlhf.output_csv_base` or `<base>_p2.csv`.
+- RLHF behavior: after each answer it reranks and asks about the two highest-ranked unseen songs until questions or fresh songs run out. Preference vector updates: `w += lr * (chosen - other)`.
+- Weight logs (for plotting): `outputs/rlhf_logs/session_<id>/rlhf_weights.csv` unless `--rlhf-log-dir` is provided.
 
-## Using as a library
+## Run: Frontend
+```bash
+python frontend/server.py
+```
+Then open http://localhost:8000
+- Matches CLI behavior (same config, same outputs).
+- Streams logs, shows the current A/B cards (top-2 unseen per step), and displays final CSV rows.
+- Saves Phase 1/2 CSVs to `paths.output_dir`; weight logs to `outputs/rlhf_logs/session_<sessionId>/rlhf_weights.csv`.
+
+## Library usage
 ```python
 from prompt2song import recommend
-songs, csv_path = recommend("energetic road trip", top_k=3, to_csv=True)
-for song in songs:
-    print(song["name"], song["score"])
+songs, csv_path = recommend("energetic road trip", top_k=5, to_csv=True)
+for s in songs:
+    print(s["name"], s["score"])
 print("CSV saved to", csv_path)
 ```
 
+## Evaluation plots
+Generate figures (label distribution, training curves, confusion matrix, RLHF rank shifts, rank trajectory, weight changes):
+```bash
+python generate_eval_plots.py \
+  --dataset-root datasets/emotions_NLP \
+  --model-dir artifacts/text_encoder/hf_model \
+  --trainer-state artifacts/text_encoder/checkpoints/checkpoint-3000/trainer_state.json \
+  --phase1-csv outputs/recs_retrieval.csv \
+  --phase2-csv outputs/recs_rlhf.csv \
+  --rlhf-log-dir outputs/rlhf_logs \
+  --out-dir outputs/figures
+```
+- If multiple RLHF sessions exist, pick one with `--rlhf-session-id <id>`.
+- Outputs include `rlhf_weight_changes.png` (preference-vector values per question).
 
-## Configuration notes
-- `paths` should point to the existing notebook artifacts (text encoder, lyric embeddings, metadata)
-- `retrieval.top_k` is the default k when none is provided
-- `retrieval.output_csv` (optional) names the Phase 1 CSV; otherwise a `_p1` suffix is used on the base filename.
-- `output.csv_filename` sets the default export base name when CLI `--filename` is omitted (still used as a fallback)
-- `retrieval.use_popularity_threshold` toggles filtering by the `track_popularity` field in your metadata
-- `retrieval.min_track_popularity` is the minimum allowed popularity when the filter is enabled; entries without `track_popularity` are skipped when the filter is on
+## Outputs at a glance
+- Phase 1: `<base>_p1.csv` (or `retrieval.output_csv`)
+- RLHF final: `<base>_p2.csv` (or `rlhf.output_csv_base`)
+- Per-step reranks (optional): `--rlhf-log-dir` / `rlhf_step_*.csv`
+- RLHF weight log: `outputs/rlhf_logs/session_<id>/rlhf_weights.csv`
 
-## Phase 2 RLHF (optional)
-Set `rlhf.num_rlhf_questions > 0` in `config.yaml` to enable a second-stage, interactive rerank:
-- Phase 1 retrieves a candidate pool sized by the requested/final top-k, then the CLI asks A/B preference questions (up to `num_rlhf_questions`).
-- A per-session preference vector over audio features is learned (with step size `rlhf.learning_rate`) and combined with the base score using `rlhf.preference_weight`.
-- Only the top `rlhf.final_top_k` (or CLI `--k` if provided) songs are returned after reranking; Phase 1 pool size follows the requested top-k (CLI `--k` or `retrieval.top_k`).
-- CSV outputs: Phase 1 writes `retrieval.output_csv` (or `<base>_p1.csv` fallback), and the RLHF-final list writes `rlhf.output_csv_base` (or `<base>_p2.csv` fallback). When RLHF is off, only the Phase 1 file is produced.
-- When `rlhf.num_rlhf_questions == 0`, behavior matches the existing Phase 1 flow aside from respecting the configured final top-k when provided.
+## Troubleshooting
+- Empty results: verify artifact paths in `config.yaml`.
+- RLHF not running: ensure `rlhf.num_rlhf_questions > 0`.
+- Frontend import errors: confirm `pip install -e prompt2song_service` was run from repo root.

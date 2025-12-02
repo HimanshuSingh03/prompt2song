@@ -109,6 +109,7 @@ def recommend(
             learning_rate=rlhf_cfg.learning_rate,
             track_history=track_history,
             weight_logger=weight_logger,
+            preference_weight=rlhf_cfg.preference_weight,
         )
         if track_history:
             preference_vector, question_history = result

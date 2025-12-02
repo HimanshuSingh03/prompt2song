@@ -1,6 +1,5 @@
 import csv
 import sys
-import random
 from pathlib import Path
 from typing import Iterable
 import numpy as np
@@ -94,6 +93,7 @@ def run_rlhf_session(
     learning_rate: float,
     track_history: bool = False,
     weight_logger: PreferenceVectorLogger | None = None,
+    preference_weight: float = 1.0,
 ) -> np.ndarray | tuple[np.ndarray, list[dict]]:
     """Interactively learn a per-session preference vector from A/B feedback.
 
@@ -109,30 +109,29 @@ def run_rlhf_session(
         empty = np.zeros(feature_vectors[0].shape if feature_vectors else (0,), dtype=float)
         return (empty, []) if track_history else empty
 
+    def rank_indices(weights: np.ndarray) -> list[int]:
+        scores: list[tuple[int, float]] = []
+        for idx, (cand, feats) in enumerate(zip(candidates, feature_vectors)):
+            base = cand.get("score", 0.0)
+            pref = float(weights @ feats) if weights.size else 0.0
+            final = base + preference_weight * pref
+            scores.append((idx, final))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return [idx for idx, _ in scores]
+
     w = np.zeros(feature_vectors[0].shape, dtype=float)
     if weight_logger:
         weight_logger.log(0, w)
-    asked_pairs: set[tuple[int, int]] = set()
-    rng = random.Random()
     answered = 0
     history: list[dict] = []
+    used_songs: set[int] = set()
 
-    max_unique_pairs = len(candidates) * (len(candidates) - 1) // 2
-    while answered < num_questions and len(asked_pairs) < max_unique_pairs:
-        pair = None
-        for _ in range(10):
-            a, b = rng.sample(range(len(candidates)), 2)
-            if a == b:
-                continue
-            if (a, b) in asked_pairs or (b, a) in asked_pairs:
-                continue
-            pair = (a, b)
-            asked_pairs.add(pair)
+    while answered < num_questions:
+        ranking = rank_indices(w)
+        available = [idx for idx in ranking if idx not in used_songs]
+        if len(available) < 2:
             break
-        if pair is None:
-            break
-
-        a_idx, b_idx = pair
+        a_idx, b_idx = available[0], available[1]
         cand_a, cand_b = candidates[a_idx], candidates[b_idx]
         try:
             print(f"\nRLHF question {answered + 1}/{num_questions}:")
@@ -183,7 +182,8 @@ def run_rlhf_session(
                 )
         else:
             # Skipped; do not count toward answered questions.
-            continue
+            pass
+        used_songs.update({a_idx, b_idx})
     return (w, history) if track_history else w
 
 
