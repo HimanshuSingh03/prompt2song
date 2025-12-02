@@ -197,6 +197,43 @@ button.ghost {
   border-color: rgba(245, 165, 36, 0.45);
 }
 
+.classification {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.classification__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.classification__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 209, 197, 0.5);
+  background: rgba(79, 209, 197, 0.15);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.classification__meta {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.classification__probs {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .hint {
   margin: 0;
   color: var(--muted);

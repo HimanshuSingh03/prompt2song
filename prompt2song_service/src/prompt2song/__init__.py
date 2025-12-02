@@ -3,7 +3,7 @@ from .encoder import PromptEncoder
 from .data import SongMetadata, SongEmbeddings
 from .recommender import Prompt2SongRecommender
 from .exporter import RecommendationExporter
-from .service import recommend
+from .service import classify_prompt, recommend
 
 __all__ = [
     "Settings",
@@ -12,5 +12,6 @@ __all__ = [
     "SongEmbeddings",
     "Prompt2SongRecommender",
     "RecommendationExporter",
+    "classify_prompt",
     "recommend",
 ]

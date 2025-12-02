@@ -21,7 +21,12 @@ if str(BACKEND_SRC) not in sys.path:
     sys.path.insert(0, str(BACKEND_SRC))
 
 from prompt2song import service  # noqa: E402
-from prompt2song.rlhf import extract_audio_features, rerank_candidates  # noqa: E402
+from prompt2song.rlhf import (  # noqa: E402
+    FEATURE_KEYS,
+    PreferenceVectorLogger,
+    extract_audio_features,
+    rerank_candidates,
+)
 
 
 def _spotify_id(song: dict[str, Any]) -> str | None:
@@ -76,6 +81,7 @@ class SessionState:
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     answered: int = 0
     logs: list[str] = field(default_factory=list)
+    classification: dict[str, Any] | None = None
     candidates: list[dict[str, Any]] = field(default_factory=list)
     feature_vectors: list[np.ndarray] = field(default_factory=list)
     preference_vector: np.ndarray | None = None
@@ -84,6 +90,8 @@ class SessionState:
     phase1_csv: Path | None = None
     final_csv: Path | None = None
     completed: bool = False
+    weight_log_path: Path | None = None
+    weight_logger: PreferenceVectorLogger | None = None
 
     def __post_init__(self) -> None:
         rlhf_cfg = service.settings.rlhf
@@ -99,6 +107,19 @@ class SessionState:
 
         self.rng = random.Random()
         self.logs.append(f"Prompt: {self.prompt}")
+        self.classification = service.classify_prompt(self.prompt)
+        if self.classification:
+            label = self.classification.get("label")
+            score = self.classification.get("score")
+            if label is not None and score is not None:
+                self.logs.append(f"Prompt classification: {label} ({score:.2f} confidence)")
+            elif label:
+                self.logs.append(f"Prompt classification: {label}")
+            probs = self.classification.get("probabilities") if isinstance(self.classification, dict) else None
+            if probs:
+                ranked = sorted(probs.items(), key=lambda kv: kv[1], reverse=True)
+                prob_str = ", ".join(f"{name}: {val:.2f}" for name, val in ranked)
+                self.logs.append(f"Class probabilities: {prob_str}")
         self.logs.append(f"Retrieving top {self.pool_k} candidates...")
 
         self.candidates = service.recommender.recommend(self.prompt, self.pool_k)
@@ -107,6 +128,14 @@ class SessionState:
             self.preference_vector = np.zeros(self.feature_vectors[0].shape, dtype=float)
         else:
             self.preference_vector = np.zeros(0, dtype=float)
+        if self.num_questions > 0 and self.feature_vectors:
+            log_root = service.settings.paths.output_dir / "rlhf_logs"
+            session_dir = log_root / f"session_{self.session_id}"
+            self.weight_log_path = session_dir / "rlhf_weights.csv"
+            self.weight_logger = PreferenceVectorLogger(
+                self.weight_log_path, session_id=self.session_id, feature_keys=FEATURE_KEYS
+            )
+            self.weight_logger.log(0, self.preference_vector)
 
         self.logs.append(f"Candidate pool ready ({len(self.candidates)} songs)")
         if self.candidates:
@@ -116,6 +145,8 @@ class SessionState:
             f"RLHF configured for {self.num_questions} questions, learning_rate={self.learning_rate}, "
             f"preference_weight={self.preference_weight}, final_top_k={self.final_top_k}"
         )
+        if self.weight_log_path:
+            self.logs.append(f"Logging preference vectors to {self.weight_log_path}")
 
     def _max_pairs(self) -> int:
         n = len(self.candidates)
@@ -184,6 +215,8 @@ class SessionState:
         else:
             self.logs.append(f"User skipped question {answered_before + 1}")
 
+        if self.weight_logger and choice in ("a", "b"):
+            self.weight_logger.log(self.answered, self.preference_vector)
         self.current_pair = None
 
     def finalize(self) -> list[dict[str, Any]]:
@@ -228,6 +261,7 @@ def _build_response(
     return {
         "sessionId": session.session_id,
         "logs": session.logs,
+        "promptClassification": session.classification,
         "question": question,
         "completed": session.completed,
         "recommendations": list(recommendations) if recommendations is not None else None,

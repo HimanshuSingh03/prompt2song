@@ -1,5 +1,7 @@
+import csv
 import sys
 import random
+from pathlib import Path
 from typing import Iterable
 import numpy as np
 
@@ -20,6 +22,30 @@ FEATURE_KEYS = [
     "key",
     "duration_ms",
 ]
+
+
+class PreferenceVectorLogger:
+    """Append preference vector values to a CSV per RLHF question."""
+
+    def __init__(self, path: Path | str, session_id: str | None = None, feature_keys: list[str] | None = None):
+        self.path = Path(path)
+        self.session_id = session_id or ""
+        self.feature_keys = feature_keys or FEATURE_KEYS
+        self.fieldnames = ["session_id", "question"] + list(self.feature_keys)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            with self.path.open("w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.fieldnames)
+                writer.writeheader()
+
+    def log(self, question_idx: int, weights: np.ndarray) -> None:
+        row: dict[str, object] = {"session_id": self.session_id, "question": question_idx}
+        for i, key in enumerate(self.feature_keys):
+            value = float(weights[i]) if i < len(weights) else 0.0
+            row[key] = value
+        with self.path.open("a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self.fieldnames)
+            writer.writerow(row)
 
 
 def extract_audio_features(metadata: dict) -> np.ndarray:
@@ -66,17 +92,30 @@ def run_rlhf_session(
     feature_vectors: list[np.ndarray],
     num_questions: int,
     learning_rate: float,
-) -> np.ndarray:
-    """Interactively learn a per-session preference vector from A/B feedback."""
+    track_history: bool = False,
+    weight_logger: PreferenceVectorLogger | None = None,
+) -> np.ndarray | tuple[np.ndarray, list[dict]]:
+    """Interactively learn a per-session preference vector from A/B feedback.
+
+    When track_history is True, also return a per-question history containing the
+    updated preference vector and the songs compared for each answered question.
+    When a weight_logger is provided, the preference vector is persisted after each
+    answered question (question index 0 is logged as the baseline).
+    """
     if num_questions <= 0 or len(candidates) < 2:
-        return np.zeros(feature_vectors[0].shape if feature_vectors else (0,), dtype=float)
+        empty = np.zeros(feature_vectors[0].shape if feature_vectors else (0,), dtype=float)
+        return (empty, []) if track_history else empty
     if not sys.stdin or not sys.stdin.isatty():
-        return np.zeros(feature_vectors[0].shape if feature_vectors else (0,), dtype=float)
+        empty = np.zeros(feature_vectors[0].shape if feature_vectors else (0,), dtype=float)
+        return (empty, []) if track_history else empty
 
     w = np.zeros(feature_vectors[0].shape, dtype=float)
+    if weight_logger:
+        weight_logger.log(0, w)
     asked_pairs: set[tuple[int, int]] = set()
     rng = random.Random()
     answered = 0
+    history: list[dict] = []
 
     max_unique_pairs = len(candidates) * (len(candidates) - 1) // 2
     while answered < num_questions and len(asked_pairs) < max_unique_pairs:
@@ -107,13 +146,45 @@ def run_rlhf_session(
         if choice == "a":
             w = w + learning_rate * (feature_vectors[a_idx] - feature_vectors[b_idx])
             answered += 1
+            if weight_logger:
+                weight_logger.log(answered, w)
+            if track_history:
+                history.append(
+                    {
+                        "question": answered,
+                        "choice": "a",
+                        "song_a": cand_a.get("name"),
+                        "artists_a": cand_a.get("artists"),
+                        "score_a": cand_a.get("score"),
+                        "song_b": cand_b.get("name"),
+                        "artists_b": cand_b.get("artists"),
+                        "score_b": cand_b.get("score"),
+                        "preference_vector": w.copy(),
+                    }
+                )
         elif choice == "b":
             w = w + learning_rate * (feature_vectors[b_idx] - feature_vectors[a_idx])
             answered += 1
+            if weight_logger:
+                weight_logger.log(answered, w)
+            if track_history:
+                history.append(
+                    {
+                        "question": answered,
+                        "choice": "b",
+                        "song_a": cand_a.get("name"),
+                        "artists_a": cand_a.get("artists"),
+                        "score_a": cand_a.get("score"),
+                        "song_b": cand_b.get("name"),
+                        "artists_b": cand_b.get("artists"),
+                        "score_b": cand_b.get("score"),
+                        "preference_vector": w.copy(),
+                    }
+                )
         else:
             # Skipped; do not count toward answered questions.
             continue
-    return w
+    return (w, history) if track_history else w
 
 
 def rerank_candidates(

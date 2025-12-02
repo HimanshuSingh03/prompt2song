@@ -4,6 +4,10 @@ const topKInput = document.getElementById("topKInput");
 const startBtn = document.getElementById("startBtn");
 const statusBadge = document.getElementById("statusBadge");
 const logOutput = document.getElementById("logOutput");
+const classificationBox = document.getElementById("classificationBox");
+const classificationLabel = document.getElementById("classificationLabel");
+const classificationConfidence = document.getElementById("classificationConfidence");
+const classificationProbabilities = document.getElementById("classificationProbabilities");
 const questionSection = document.getElementById("questionSection");
 const questionCounter = document.getElementById("questionCounter");
 const songATitle = document.getElementById("songATitle");
@@ -33,6 +37,32 @@ function renderLogs(logs = []) {
   }
   logOutput.textContent = logs.join("\n");
   logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+function renderClassification(info) {
+  if (!info || typeof info !== "object") {
+    classificationLabel.textContent = "";
+    classificationConfidence.textContent = "";
+    classificationProbabilities.textContent = "";
+    classificationBox.hidden = true;
+    return;
+  }
+  const label = info.label || "Unknown";
+  classificationLabel.textContent = label;
+  const score = info.score;
+  classificationConfidence.textContent =
+    typeof score === "number" ? `Confidence ${score.toFixed(2)}` : "";
+
+  const probs = info.probabilities;
+  if (probs && typeof probs === "object") {
+    const ranked = Object.entries(probs)
+      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+      .map(([name, val]) => `${name}: ${(val ?? 0).toFixed(2)}`);
+    classificationProbabilities.textContent = ranked.join("  ");
+  } else {
+    classificationProbabilities.textContent = "";
+  }
+  classificationBox.hidden = false;
 }
 
 function embedContent(container, info) {
@@ -102,6 +132,7 @@ function applyPayload(data) {
   if (data.sessionId) {
     sessionId = data.sessionId;
   }
+  renderClassification(data.promptClassification);
   renderLogs(data.logs);
   renderQuestion(data.question);
   if (data.completed) {
@@ -121,6 +152,7 @@ async function startRun(event) {
   if (!prompt) return;
 
   resultsSection.hidden = true;
+  renderClassification(null);
   sessionId = null;
   setStatus("Starting…");
   startBtn.disabled = true;
