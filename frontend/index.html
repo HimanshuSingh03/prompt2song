@@ -38,22 +38,6 @@
         </form>
       </section>
 
-      <section class="panel">
-        <div class="panel__header">
-          <h2>CLI transcript</h2>
-          <span class="status" id="statusBadge">Idle</span>
-        </div>
-        <div class="classification" id="classificationBox" hidden>
-          <p class="label">Prompt classification</p>
-          <div class="classification__row">
-            <span class="classification__pill" id="classificationLabel"></span>
-            <span class="classification__meta" id="classificationConfidence"></span>
-          </div>
-          <p class="classification__probs" id="classificationProbabilities"></p>
-        </div>
-        <pre id="logOutput" class="log-output">Submit a prompt to stream logs here.</pre>
-      </section>
-
       <section class="panel" id="questionSection" hidden>
         <div class="panel__header">
           <h2>RLHF preference check</h2>
@@ -100,6 +84,22 @@
             <tbody></tbody>
           </table>
         </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>CLI transcript</h2>
+          <span class="status" id="statusBadge">Idle</span>
+        </div>
+        <div class="classification" id="classificationBox" hidden>
+          <p class="label">Prompt classification</p>
+          <div class="classification__row">
+            <span class="classification__pill" id="classificationLabel"></span>
+            <span class="classification__meta" id="classificationConfidence"></span>
+          </div>
+          <p class="classification__probs" id="classificationProbabilities"></p>
+        </div>
+        <pre id="logOutput" class="log-output">Submit a prompt to stream logs here.</pre>
       </section>
     </main>
 
