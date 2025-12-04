@@ -1,0 +1,576 @@
+\documentclass[11pt]{article}
+
+% Change "review" to "final" to generate the final (sometimes called camera-ready) version.
+% Change to "preprint" to generate a non-anonymous version with page numbers.
+\usepackage[]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{amsmath}
+
+\usepackage{tabularx}
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+%
+%\setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+
+\title{Group 30 Final Report:\\Prompt-Driven Song Recommendation via Lyric + Acoustic Modeling}
+
+
+\author{
+  Matthew Mark, Himanshu Singh, Muhammad Umar Khan \\
+  \texttt{\{markm4,singh41,khanm417\}@mcmaster.ca} \\
+  \href{https://github.com/HimanshuSingh03/prompt2song}{\textbf{GitHub Link}}
+}
+
+%\author{
+%  \textbf{First Author\textsuperscript{1}},
+%  \textbf{Second Author\textsuperscript{1,2}},
+%  \textbf{Third T. Author\textsuperscript{1}},
+%  \textbf{Fourth Author\textsuperscript{1}},
+%\\
+%  \textbf{Fifth Author\textsuperscript{1,2}},
+%  \textbf{Sixth Author\textsuperscript{1}},
+%  \textbf{Seventh Author\textsuperscript{1}},
+%  \textbf{Eighth Author \textsuperscript{1,2,3,4}},
+%\\
+%  \textbf{Ninth Author\textsuperscript{1}},
+%  \textbf{Tenth Author\textsuperscript{1}},
+%  \textbf{Eleventh E. Author\textsuperscript{1,2,3,4,5}},
+%  \textbf{Twelfth Author\textsuperscript{1}},
+%\\
+%  \textbf{Thirteenth Author\textsuperscript{3}},
+%  \textbf{Fourteenth F. Author\textsuperscript{2,4}},
+%  \textbf{Fifteenth Author\textsuperscript{1}},
+%  \textbf{Sixteenth Author\textsuperscript{1}},
+%\\
+%  \textbf{Seventeenth S. Author\textsuperscript{4,5}},
+%  \textbf{Eighteenth Author\textsuperscript{3,4}},
+%  \textbf{Nineteenth N. Author\textsuperscript{2,5}},
+%  \textbf{Twentieth Author\textsuperscript{1}}
+%\\
+%\\
+%  \textsuperscript{1}Affiliation 1,
+%  \textsuperscript{2}Affiliation 2,
+%  \textsuperscript{3}Affiliation 3,
+%  \textsuperscript{4}Affiliation 4,
+%  \textsuperscript{5}Affiliation 5
+%\\
+%  \small{
+%    \textbf{Correspondence:} \href{mailto:email@domain}{email@domain}
+%  }
+%}
+
+\begin{document}
+\maketitle
+% \begin{abstract}
+% \end{abstract}
+
+\section{Introduction}
+
+Music recommendation systems have become a key part of how people discover songs, but most of them rely on user behavior patterns or basic metadata like genre and artist. While these methods work for predicting general listening preferences, they often fail to understand the emotional meaning behind what a user actually wants to hear. A person might search for a song by describing how they feel, using natural language such as “I’m feeling anxious but hopeful” or “I just lost someone close to me,” but current systems are not designed to interpret that kind of emotional input.
+
+Our goal is to close that gap by creating a recommendation system that can understand free text prompts and connect them to music that matches the user’s emotional state. This project focuses on linking the emotion expressed in a user’s language to the emotional tone of songs, using both lyrical meaning and acoustic qualities to guide selection. The motivation is to make recommendations more expressive, personal, and context aware, so that the system can respond to how a listener feels rather than just what they have played before. This type of emotion based recommendation has potential uses beyond entertainment, including therapeutic music selection and adaptive wellness tools that respond to a person’s mood in real time.
+
+Although no one has built a system that performs true free text to music emotion matching, a few key research areas overlap with what we are doing. These include emotion recognition in text, music emotion recognition (MER), and affective recommendation systems.
+
+Early work on text emotion relied on hand crafted lexical resources. \citet{mohammad2013} developed the NRC Emotion Lexicon, which mapped words to emotional categories and became a foundation for early affective NLP systems. As deep learning evolved, transformer models like BERT \citep{devlin2019bert} and its distilled version DistilBERT \citep{sanh2019distilbert} replaced static word lists with context aware embeddings that capture emotional tone from sentence structure rather than individual tokens.
+
+In the music domain, \citet{yang2012musicemotion} provided one of the first large-scale reviews of MER methods, describing both lyric-based and acoustic-feature-based techniques. Later work such as \citet{huang2022multimodal} combined these modalities using multimodal neural networks to classify song emotion. However, these systems still operate on fixed categorical labels (e.g., happy, sad, angry), effectively treating the task as a one-hot classification problem. \citet{ferwerda2017playlist} explored mood and personality driven recommendation, but still relied on predefined mood tags instead of natural-language understanding. More recently, \citet{melchiorre2023emomtb} built a system that maps songs into a continuous emotion space using mood tags and audio features. This approach moves away from fixed labels and supports more flexible emotion-based recommendations, similar to what we aim to achieve with free-text inputs.
+
+Our project builds on these foundations by linking the emotional semantics expressed in text to the emotional tone embedded within song lyrics and acoustic features, aiming for a recommendation framework that interprets free-form language rather than categorical mood tags.
+
+\section{Dataset}
+
+To train our emotion model, we used the Emotions Dataset for NLP \citep{govi2020emotions}, which contains short text snippets labeled across six emotion categories: anger, fear, joy, love, sadness, and surprise. Each example follows a simple semicolon-separated \texttt{text;label} format, making it straightforward to preprocess and fine-tune on transformer-based architectures. This dataset provided the foundation for developing our emotion embedder model, allowing the network to learn how natural language expresses affective states.
+
+For the music data, we combined two public Kaggle datasets: the Spotify Most Popular Songs Dataset \citep{pancholi2023spotify} and the Audio Features and Lyrics of Spotify Songs Dataset \citep{muhammad2023audiofeatures}. The first dataset contains around 1,000 of Spotify’s most popular tracks, providing lyric and audio feature data for highly streamed, well-known songs. The second dataset is much larger, with approximately 18,000 songs that span a broader range of genres and include both lyrics and audio features. By using both datasets, we combined the popularity and consistency of mainstream music with the diversity and emotional range of a wider song collection.
+
+During preprocessing, we aligned both datasets by matching song titles and artist names and removed duplicates or incomplete entries. All audio feature values, such as energy, danceability, and valence, were already normalized between 0 and 1, so no further scaling was needed. The result was a unified dataset where each song contains both its lyrics and corresponding normalized acoustic attributes.
+
+% ---- TABLE: Summary of datasets used in the project ----
+\begin{table}[h!]
+\centering
+\small
+\begin{tabularx}{\columnwidth}{l X}
+\hline
+\textbf{Dataset} & \textbf{Description} \\
+\hline
+Emotions Dataset for NLP & 20k text samples labeled with 6 emotions; cleaned and split into train/val/test sets. \\
+Spotify Songs Metadata & $\sim$1k songs with lyrics and audio features (danceability, energy, valence, etc.). \\
+Spotify Songs Dataset & $\sim$18k songs preprocessed using the same pipeline, source-tagged for tracking. \\
+Merged Dataset & 18,247 total entries with unified text and numeric attributes. \\
+\hline
+\end{tabularx}
+\caption{Summary of datasets used in the project.}
+\label{tab:dataset-summary}
+\end{table}
+% ---- END TABLE ----
+
+\section{Features and Inputs}
+
+Our system takes free-text prompts and song lyrics as primary inputs. Both are tokenized with the \texttt{distilbert-base-uncased} tokenizer, truncated/padded to a fixed length, and mean-pooled from the last hidden state of a fine-tuned emotion classifier trained on the 20k Emotions corpus. After removing the classification head, the 768-dimensional encoder outputs define a shared emotion embedding space for cosine matching between prompts and lyrics. This representation is appropriate because users express musical intent primarily through emotional language, so aligning prompts and lyrics in an emotion-trained embedding space improves semantic matching.
+
+The song corpus is standardized from two Kaggle sources into a canonical schema, with lowercased/condensed lyrics and coerced numeric audio attributes (danceability, energy, loudness, speechiness, acousticness, instrumentalness, liveness, valence, tempo, mode, key, duration, popularity). Lyric embeddings are stored as \texttt{.npy} files and L2-normalized at retrieval. Acoustic features are converted into a 12-D vector with light scaling (e.g., loudness/60, tempo/250) to stabilize learning and capture musical ``vibe'' dimensions unavailable in text.
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"Features and Inputs.png"}
+  \caption{Features and inputs overview: prompt/lyric embedding pipeline with optional acoustic preference reranking.}
+  \label{fig:features_inputs}
+\end{figure}
+
+For personalization, Phase 2 learns a per-session preference vector from A/B feedback to rerank the text-retrieved candidates based on acoustic similarity. No explicit feature selection or augmentation was applied beyond schema standardization because the dataset is already diverse and high-variance (lyrics + audio attributes), and we aimed to isolate the effect of our emotion encoder and RLHF reranking rather than introduce confounding transformations. Across experiments, we varied text-only retrieval versus text + acoustic RLHF reranking to evaluate the contribution of personalized acoustic preferences beyond the emotion-based text embeddings.
+
+\section{Implementation}
+
+\subsection{Model Architecture and Training}
+
+Our approach builds on previous emotion recognition research but takes it a step further by combining emotional understanding with user preference learning in a two-phase model. The first phase focuses on interpreting the user’s emotional intent from text and mapping both their prompt and song lyrics into the same emotion space for comparison. This gives us a structured way to find songs that share a similar emotional tone. The second phase builds on top of that by introducing reinforcement learning, where the model starts adapting to each user through direct feedback. By combining these two stages, the system moves from simply matching lyrical emotion to actually learning what audio features each listener prefers for their prompt. The result is a recommendation process that feels both emotionally aligned and personally tuned to the user’s mood and taste.
+
+% ---- FIGURE: Phase 1 - Text-based Emotion Matching for Lyrics ----
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/"figure 1.png"}
+    \caption{Phase 1 - Text-based Emotion Matching for Lyrics.}
+    \label{fig:phase1}
+\end{figure}
+% ---- END FIGURE ----
+
+In Phase~1, the model learns and compares emotional meaning between user prompts and song lyrics using a fine-tuned transformer. It takes two text inputs: the user’s emotional prompt (\texttt{t\_prompt}) and song lyrics (\texttt{lyrics}) from the dataset. Both are tokenized through the \texttt{DistilBERT-base-uncased} tokenizer, which converts text into token IDs and attention masks with truncation and fixed-length padding to maintain consistent input dimensions. 
+
+DistilBERT \citep{sanh2019distilbert} was chosen as the backbone due to its strong balance of speed and representational quality, inheriting much of BERT’s capability \citep{devlin2019bert} while being smaller and more efficient. The maximum sequence length of 128 tokens was selected to capture the context of short lyrics and text prompts while keeping training efficient. In future iterations, we may increase this limit or use larger models (e.g., BERT-large) to capture more nuanced emotional context.
+
+Training was conducted using the Hugging Face \texttt{Trainer} API with cross-entropy loss for multi-class emotion classification. We used the AdamW optimizer with a learning rate of $2\times10^{-5}$ and weight decay of 0.01 to prevent overfitting. The model trained for eight epochs with batch sizes of 16 (training) and 32 (evaluation), employing early stopping (patience = 2) and saving the best checkpoint by macro-F1 performance.
+
+After training, the classification head was removed and the encoder reused to generate 768-dimensional emotion embeddings for both lyrics and prompts. These embeddings form a shared emotion space linking what the user expresses to the emotional tone of songs.
+
+% ---- FIGURE: Phase 2 - Reinforcement-learning Contextual Bandit Refinement ----
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/"figure 2.png"}
+    \caption{Phase 2 - Reinforcement learning: acoustic preference learning from pairwise feedback.}
+    \label{fig:phase2}
+\end{figure}
+% ---- END FIGURE ----
+
+Phase 2 adds a lightweight preference-learning layer on top of the standard Phase 1 retrieval system. Phase 1 embeds the user’s text prompt using a language model, computes cosine similarity against lyric embeddings, and ranks all songs accordingly. This cosine-only ranking is the primary trained baseline. When no RLHF interactions are requested, the system simply returns this ranking unchanged.
+
+Phase 2 operates entirely within a defined 12-dimensional audio-feature space that includes attributes such as danceability, valence, energy, loudness, tempo, and duration. Certain features are rescaled for stability, and any missing values are replaced with zeros so that dot-product operations remain consistent across all tracks.
+
+The interaction model is strictly pairwise. The system presents two candidate songs at a time, and the user chooses the one they prefer. Each choice triggers a pointwise update to the preference vector, using a gradient-style weight update:
+\[
+\mathbf{w} \leftarrow \mathbf{w} + \eta (\mathbf{f}_{\text{chosen}} - \mathbf{f}_{\text{rejected}})
+\]
+This forms a pairwise objective that increases the margin between preferred and non-preferred songs based on their feature differences. Duplicate A/B pairs are avoided, and the session ends when a configurable, preset number of comparisons has been reached.
+
+To apply these preferences, Phase 2 reranks candidate songs using a combined score:
+\[
+s_{\text{final}} = s_{\text{cos}} + \alpha (\mathbf{w} \cdot \mathbf{f})
+\]
+where $s_{\text{cos}}$ is the base cosine score and $\alpha$ is the preference weight.
+The cosine component preserves emotional alignment from Phase 1, while the dot-product term aligns results with the user’s emerging taste profile. The final ranking is obtained by sorting on this combined score and selecting the desired top-$k$.
+
+This approach does not use SGD or gradient-based neural optimization. Evaluation focuses on determining whether this RLHF adaptation actually improves recommendation quality. The simplest baseline is the non-personalized case, where the top-$k$ songs are output from Phase 1, which serves as the “majority” or no-learning baseline. The trained baseline compares Phase 1 alone against Phase 2 with active preference updates. Phase 2 is judged successful when it yields higher user satisfaction.
+
+\subsection{Baseline Comparison}
+
+To evaluate our model’s improvement, we compared it against a majority-class baseline that always predicts the most frequent label (“joy”). This baseline achieved roughly 35\% accuracy and 0.09 macro F1, showing the dataset’s class imbalance.  
+In contrast, our fine-tuned DistilBERT model achieved 93\% accuracy and 0.88 macro F1—representing a 2.5× improvement in accuracy and nearly a 10× improvement in macro F1.  
+These results confirm the model’s ability to capture emotional tone and generalize effectively to unseen text.
+
+\section{Results and Evaluation}
+
+\noindent
+Our evaluation strategy examines both:
+\begin{itemize}
+    \item \textbf{(1) the performance of the supervised emotion encoder in Phase 1} 
+    \item \textbf{(2) the personalization and adaptive ranking behavior introduced through RLHF in Phase 2}
+\end{itemize}
+
+While Phase 1 is primarily assessed using fixed train/validation/test splits and standard classification metrics, Phase 2 is evaluated behaviorally---through preference-driven rank changes and dynamic weight-vector updates in response to human feedback.
+
+\medskip
+
+For the updated experiment centered on the prompt ``my dog passed away'', the new plots reveal how emotionally grounded retrieval interacts with user-specific acoustic preferences to shape final recommendations.
+
+We first confirm that the underlying emotion classifier used to embed user prompts and song lyrics is stable and well-behaved. The dataset distribution shown in Figure~\ref{fig:TVV_Distribution} highlights substantial class imbalance, particularly the dominance of \textit{joy} and \textit{sadness} and the scarcity of \textit{surprise}. This distribution motivated our use of macro-F1 as the primary model-selection metric.
+
+% ---- FIGURE: Visual of Distribution within Training, Validation, and Testing Datasets ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 3.png"}
+  \caption{Visual of Distribution within Training, Validation, and Testing Datasets}
+  \label{fig:TVV_Distribution}
+\end{figure}
+% ---- END FIGURE ----
+
+% ---- FIGURE: Confusion Matrix (Test) ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 5.png"}
+  \caption{Confusion Matrix (Test)}
+  \label{fig:confusion-matrix}
+\end{figure}
+% ---- END FIGURE ----
+
+The final test-set confusion matrix for the fine-tuned DistilBERT encoder, shown in Figure~\ref{fig:confusion-matrix}, demonstrates strong diagonal structure: the model reliably distinguishes between major emotions, though some predictable overlaps remain (for example, between \textit{fear} and \textit{surprise}). Importantly for this experiment, \textit{sadness}---the dominant emotion for the prompt ``my dog passed away''---is one of the model’s top-performing categories, meaning Phase 1 provides robust emotional embeddings for both the prompt and the candidate lyrics.
+
+However, emotional alignment alone does not guarantee user satisfaction. Songs that are lyrically appropriate for grief may differ drastically in acoustics—tempo, valence, vocal intensity, or production style—which strongly affect whether a listener actually resonates with the recommendation. Because of this, Phase 2 incorporates reinforcement learning from human feedback (RLHF) to model personal taste. This stage is where the evaluation becomes far more dynamic and individualized.
+
+For the grief-related prompt, Phase 1 produces an emotionally coherent but acoustically diverse list of candidates. RLHF then iteratively reshapes this list via A/B preference comparisons. The resulting rank shifts are shown in Figure~\ref{fig:song-rank-rlhf}. Notably, several songs—such as \textit{Corduroy Dreams} (Rex Orange County), \textit{Ocean} (Ella Vos), and \textit{Dying for You} (Otto Knows)—demonstrate substantial upward movement in the rankings, gaining between $+20$ and $+40$ positions relative to their original emotionally-based ranks. These songs share acoustic traits often associated with reflective or grieving contexts (e.g., low tempo, lower valence, softer vocal presence).
+
+Conversely, songs like \textit{If I Ever Lose My Faith in You} (Sting) drop dramatically, reflecting user preferences that reject upbeat or high-energy tracks even when they are lyrically relevant to loss. This highlights the necessity of personalized, feedback-driven ranking to ensure that recommendations are not just emotionally congruent but also acoustically and experientially aligned with the user's current mood.
+
+% ---- FIGURE: Song Ranking After RLHF Personalization ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"song rank.png"}
+  \caption{Re-ranking of top song recommendations after RLHF-based personalization in Phase 2, showing the shift in recommendations in response to user feedback on the prompt ``my dog passed away''.}
+  \label{fig:song-rank-rlhf}
+\end{figure}
+% ---- END FIGURE ----
+
+The most significant addition in this iteration of the evaluation is the preference-vector-over-questions plot, shown in Figure~\ref{fig:weight-vector}. This visualization reveals, step by step, why certain songs rise or fall in ranking. The weight vector begins at zero for all acoustic features, meaning Phase 2 initially defers entirely to emotional similarity. After each RLHF question, the preference vector adjusts based on the user’s A/B choices and optional reason tags.
+
+% ---- FIGURE: Learned Weight Vector Visualization ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"weight vector.png"}
+  \caption{Visualization of the learned acoustic preference weight vector after RLHF personalization. The plot shows how specific acoustic features (e.g., tempo, valence, danceability) are up- or down-weighted for the user based on feedback during recommendation for the prompt ``my dog passed away''.}
+  \label{fig:weight-vector}
+\end{figure}
+% ---- END FIGURE ----
+
+For the grief prompt, several interpretable patterns emerge:
+
+\begin{itemize}
+    \item \textbf{Liveness}, \textbf{acousticness}, and \textbf{valence} steadily increase, indicating the user is steering the model toward calmer, more organic, emotionally subdued songs.
+    \item \textbf{Energy}, \textbf{tempo}, and \textbf{loudness} move sharply negative, meaning upbeat or intense tracks are systematically penalized.
+    \item \textbf{Speechiness} and \textbf{instrumentalness} remain close to zero, suggesting these attributes did not significantly influence the user’s decisions during this session.
+    \item \textbf{Duration} shows a weak negative drift, hinting that shorter, more intimate tracks were favored over long or extended arrangements.
+\end{itemize}
+
+By step~5, the weight vector has converged into a stable configuration: \textbf{acousticness} and low-valence cues dominate, high-energy traits are heavily discouraged, and other features exert mild but consistent influence. These trajectories confirm that RLHF is not merely reordering songs arbitrarily---the system is learning a structured preference landscape that directly reflects how the user interprets an emotionally heavy prompt like ``my dog passed away.''
+
+Taken together, the rank-shift plot and the preference-vector evolution provide a coherent picture of Phase~2's success. Phase~1 ensures emotional correctness by embedding the prompt and lyrics in a shared semantic space, while Phase~2 personalizes the recommendation by amplifying features associated with the user's preferred sonic expression of grief. The resulting list is not just ``sad songs''---it becomes a finely tuned set of tracks that match both emotional meaning and the user's desired acoustic atmosphere of mourning or reflection.
+
+To further validate Phase~2, we conducted an in-person user study in the library, asking friends to rate their recommendation lists before and after RLHF on a 1--10 scale. Across most emotions---especially \textit{sadness}, \textit{joy}, \textit{love}, and \textit{anger}---satisfaction reliably increased after Phase~2. Examples include jumps such as $6 \to 8$, $9 \to 10$, $5 \to 8$, and $6 \to 7$, showing that RLHF successfully adapts acoustic attributes---like tempo, vocal presence, and valence---to better match users' desired emotional tone for the prompt. These consistent improvements align with the rank-shift and weight-vector plots, confirming that RLHF meaningfully personalizes recommendations.
+
+However, the study also highlighted an important limitation: emotions such as fear and surprise, which are not well represented in mainstream music, saw little or no improvement (e.g., $2 \to 4$ but also $3 \to 1$, $1 \to 1$, $5 \to 4$). In these cases, Phase~1 often retrieves emotionally adjacent songs that do not truly reflect the intended feeling, and RLHF cannot fully correct for this mismatch. Overall, user feedback confirms that RLHF substantially enhances satisfaction when the underlying emotion has a strong musical correlation, while revealing the challenges of modeling emotions that lack clear expression in typical song catalogs.
+
+% ---- TABLE: User Satisfaction Before and After RLHF ----
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{cccc}
+\hline
+\textbf{Base Score} & \textbf{Post RLHF} & \textbf{Prompt Emotion} \\
+\hline
+6 & 8 & sadness \\
+9 & 9 & sadness \\
+2 & 4 & fear \\
+9 & 10 & sadness \\
+5 & 8 & joy \\
+6 & 7 & joy \\
+4 & 6 & anger \\
+8 & 9 & sadness \\
+3 & 1 & fear \\
+9 & 9 & sadness \\
+6 & 8 & joy \\
+7 & 4 & love \\
+3 & 4 & anger \\
+6 & 8 & love \\
+5 & 5 & joy \\
+4 & 3 & anger \\
+8 & 10 & love \\
+1 & 1 & surprise \\
+9 & 8 & sadness \\
+2 & 3 & joy \\
+7 & 9 & sadness \\
+3 & 3 & joy \\
+6 & 7 & love \\
+5 & 7 & anger \\
+7 & 7 & sadness \\
+8 & 9 & love \\
+3 & 5 & anger \\
+5 & 4 & surprise \\
+7 & 9 & love \\
+6 & 4 & joy \\
+\hline
+\end{tabular}
+\caption{User satisfaction ratings before and after RLHF-based personalization for each prompt. Scores are on a 1--10 scale; RLHF typically increases satisfaction, especially for grief-related prompts. Prompt emotion classification is shown for reference.}
+\label{tab:user-satisfaction-rlhf}
+\end{table}
+% ---- END TABLE ----
+
+
+\subsection{Data Splits and Reproducibility}
+
+The NLP dataset was divided into fixed training, validation, and test splits of 16,000, 2,000, and 2,000 examples respectively. The emotion distribution across these splits is moderately imbalanced, with \textit{joy} and \textit{sadness} being the most common and \textit{surprise} the least frequent. Because of this imbalance, macro-F1 was chosen as the primary evaluation metric, supported by accuracy and weighted-F1 for reference.
+
+We used fixed splits instead of k-fold cross-validation, since fine-tuning a large pre-trained model benefits more from a stable validation set for checkpoint selection. Early stopping was applied to prevent overfitting, and the final model checkpoint corresponded to the highest validation macro-F1 score.
+
+\subsection{Validation Protocol During Training}
+
+Training was managed using the Hugging Face \texttt{Trainer}, evaluating the model after each epoch. Early stopping with a patience of two epochs halted training once validation metrics plateaued. After training, the checkpoint with the best macro-F1 score on validation was restored for all subsequent evaluation. We also log training and validation losses and metrics at each epoch to monitor convergence.
+
+% ---- FIGURE: Training and Validation Loss Curves Across Epochs ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 4.png"}
+  \caption{Training and Validation Loss Curves Across Epochs}
+  \label{fig:trainValCurve}
+\end{figure}
+% ---- END FIGURE ----
+
+After model selection, we perform a single evaluation on the held-out test set using the best checkpoint. This provides a reliable estimate of generalization to unseen data. No training or hyperparameter decisions are influenced by the test results.
+
+\subsection{Evaluation Metrics and Results}
+
+We report multiple metrics to capture overall and class-specific performance:
+
+\begin{itemize}
+    \item \textbf{Accuracy:} Proportion of correctly predicted examples.
+    \item \textbf{Macro-F1:} Unweighted mean of F1 scores across all classes; our primary selection metric, as it treats each emotion equally.
+    \item \textbf{Weighted-F1:} Class-frequency-weighted F1 score, accounting for imbalance.
+\end{itemize}
+
+The model achieves strong overall performance on the test set, with 93\% accuracy, macro-F1 = 0.88, and weighted-F1 = 0.93. Table 2 summarizes the detailed per-class metrics.
+
+% ---- TABLE: Per-class performance on the test set ----
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{lcccc}
+\hline
+\textbf{Emotion} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Samples} \\
+\hline
+Anger & 0.93 & 0.91 & 0.92 & 275 \\
+Fear & 0.88 & 0.92 & 0.90 & 224 \\
+Joy & 0.94 & 0.95 & 0.95 & 695 \\
+Love & 0.83 & 0.81 & 0.82 & 159 \\
+Sadness & 0.96 & 0.97 & 0.96 & 581 \\
+Surprise & 0.82 & 0.68 & 0.74 & 66 \\
+\hline
+\textbf{Accuracy} &
+\multicolumn{3}{c}{0.93 (2,000 samples)} &
+\\
+\textbf{Macro Avg} & 0.89 & 0.87 & 0.88 & \\
+\textbf{Weighted Avg} & 0.93 & 0.93 & 0.93 & \\
+\hline
+\end{tabular}
+\caption{Per-class performance on the test set.}
+\label{tab:class-performance}
+\end{table}
+% ---- END TABLE ----
+
+The results indicate that the model performs particularly well on \textit{joy} and \textit{sadness}, while \textit{surprise} remains the most challenging category due to its limited representation. The slightly lower recall for \textit{surprise} suggests occasional confusion with semantically similar emotions such as \textit{fear} or \textit{love}.
+
+\subsection{Confusion Matrix Analysis}
+
+The confusion matrix (Figure~\ref{fig:confusion-matrix}) shows strong diagonal dominance, indicating that the model accurately classifies most samples across all emotion categories. Misclassifications are primarily concentrated between \textit{love} and \textit{joy} (both positive affective states) and between \textit{surprise} and \textit{fear}, consistent with their semantic proximity. Despite these overlaps, the model maintains high overall precision and recall across categories, confirming robust generalization.
+
+\subsection{Visual Representation Checks}
+
+To complement quantitative metrics, we examined the semantic quality of the model’s learned embeddings by comparing vector representations of different emotion prompts. Each prompt was encoded using the fine-tuned model, and pairs of vectors were compared across embedding dimensions using cosine similarity to assess how the model differentiates or aligns emotional meanings.
+
+% ---- FIGURE: Contrasting prompts embedding comparison ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 6.png"}
+  \caption{Compares two contrasting prompts (Calm + Hopeful vs. Anxious + Hopeless), showing opposing component patterns and a low cosine similarity of 0.161, indicating that the model encodes these as distinct emotional states.}
+  \label{fig:embed_comp1}
+\end{figure}
+% ---- END FIGURE ----
+
+% ---- FIGURE: Similar prompts embedding comparison ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 7.png"}
+  \caption{Compares two semantically similar prompts (Calm + Hopeful vs. Peaceful + Reassuring), which display highly aligned patterns with a cosine similarity of 0.941, suggesting that the model clusters related emotions close together in vector space.}
+  \label{fig:embed_comp2}
+\end{figure}
+% ---- END FIGURE ----
+
+To further assess the structure of the learned emotion space, we projected the 768-dimensional embeddings of text and lyric inputs into two dimensions using t-SNE (Figure~\ref{fig:t_sne}), which is a common nonlinear dimensionality reduction method commonly used for visualizing high-dimensional representations.
+
+% ---- FIGURE: t-SNE visualization ----
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/"figure 8.png"}
+  \caption{Visual Separation of Emotional Embedding Clusters}
+  \label{fig:t_sne}
+\end{figure}
+% ---- END FIGURE ----
+
+Importantly, prompt embeddings (user text inputs) and lyric embeddings (song data) occupy overlapping regions, demonstrating that the shared encoder captures a consistent semantic space across different input sources. Although t-SNE can exaggerate cluster overlap due to compression of global distances, the clear local grouping confirms that the model’s embeddings are emotionally and semantically coherent.
+
+Overall, the evaluation confirms that the model encodes emotional meaning in text and lyrics, forming the foundation for the next stage of the project. These embeddings will serve as the starting point for Phase 2, where a reinforcement learning contextual-bandit model will refine recommendations based on user feedback and preferred audio features.
+
+\section{Progress} 
+In our progress report, we planned for Phase 2 to use a contextual bandit that adapts recommendations through A/B feedback by updating a personalized preference vector. We followed the core of that plan, as the system still takes emotionally aligned songs from Phase 1, presents two options, and updates user-specific weights based on which song the user prefers.
+
+However, the implementation evolved as we refined the design. Instead of using a full contextual bandit, we shifted to a more stable logistic pairwise update rule. We also removed the optional ``reason tags,'' making the feedback loop purely driven by the user's A/B choice. This streamlined the update mechanism and kept interactions consistent. We additionally introduced a configurable limit on the number of comparisons per session. These changes preserve the original intent while making the system more practical, lightweight, and aligned with real user behavior.
+
+\section{Error Analysis}
+
+We conducted a systematic error analysis across both phases of our system.
+
+\subsection{Phase 1: Supervised Emotion Encoder Error Patterns}
+
+\subsubsection{Class Level Weaknesses}
+
+The per-class metrics shown in Table~\ref{tab:class-performance} reveal a clear pattern: the model performs strongly on \textit{joy} and \textit{sadness}, while \textit{surprise} remains the most error-prone class (F1-score = 0.74). The lower recall for \textit{surprise} indicates these examples are often misclassified as \textit{fear} or \textit{love}, which is confirmed visually in the confusion matrix (Figure~\ref{fig:confusion-matrix}). \textit{Surprise} is also the smallest emotion label in the dataset (see Figure~\ref{fig:TVV_Distribution}), so the classifier lacks enough data to form a distinct representation in the embedding space.
+
+\subsubsection{Confusion Structure}
+
+The confusion matrix (Figure~\ref{fig:confusion-matrix}) shows two dominant error groupings:
+\begin{itemize}
+    \item Surprise $\rightarrow$ Fear (semantic proximity of high-arousal negative emotions)
+    \item Love $\rightarrow$ Joy (both positive, warm affect)
+\end{itemize}
+These confusions reflect meaningful emotional similarity rather than random errors, indicating the encoder captures broad affective structure but struggles with fine-grained distinctions.
+
+\subsubsection{Embedding-level Consistency}
+
+The embedding comparisons (Figures~\ref{fig:embed_comp1} and~\ref{fig:embed_comp2}) demonstrate that semantically similar prompts (e.g., Calm + Hopeful vs. Peaceful + Reassuring) cluster tightly, whereas opposing emotions produce low cosine similarity. This suggests most Phase 1 errors arise from label ambiguity or underrepresented categories, not representational collapse.
+
+\subsubsection{Impact on Downstream Retrieval}
+
+Because Phase 1 embeddings drive initial lyric similarity ranking, misclassification errors—especially in \textit{fear} and \textit{surprise}—propagate into retrieval. For emotions with clear musical representation (\textit{sadness}, \textit{joy}), Phase 1 provides strong candidates; but for ambiguous emotions, the retrieval list becomes acoustically or thematically mismatched, forcing Phase 2 to compensate.
+
+\subsection{Phase 2: RLHF Preference Learning Error Patterns}
+
+\subsubsection{Where RLHF Succeeds}
+
+The rank shift plot (Figure~\ref{fig:song-rank-rlhf}) demonstrates that RLHF consistently corrects emotional mismatches when the emotion is clearly expressed in the audio. For the prompt ``my dog passed away'':
+\begin{itemize}
+    \item Low-tempo, low-energy, high-acousticness songs rise sharply in ranking.
+    \item Upbeat or high-energy tracks drop (e.g. \textit{If I Ever Lose My Faith in You}).
+\end{itemize}
+
+The preference trajectory plot (Figure~\ref{fig:weight-vector}) shows smooth, interpretable weight evolution:
+\begin{itemize}
+    \item Liveness, acousticness, valence $\uparrow$ $\rightarrow$ preference for calm, organic, reflective songs
+    \item Energy, tempo, loudness $\downarrow$ $\rightarrow$ avoidance of upbeat tracks
+    \item Speechiness, instrumentalness $\sim0$ $\rightarrow$ neutral impact on decisions
+\end{itemize}
+These trends confirm that RLHF learns a stable, human-interpretable preference vector, rather than producing chaotic rerankings with little to no basis.
+
+\subsubsection{Where RLHF Fails}
+
+The user study results in Table~\ref{tab:user-satisfaction-rlhf} reveal a systematic limitation:
+\begin{itemize}
+    \item Emotions like fear and surprise show little or negative improvement (e.g., 3$\rightarrow$1, 1$\rightarrow$1, 5$\rightarrow$4).
+\end{itemize}
+
+\textbf{Why?}
+
+Phase 1 retrieves poorly aligned songs for these emotions because they lack strong lyrical or acoustic representation in the dataset. Phase 2 only reranks within those candidates; it cannot create new, emotionally appropriate songs that do not exist in the catalog.
+
+Thus, RLHF is only effective when Phase 1 provides emotionally relevant starting points.
+
+\subsection{Cross-Phase Error Themes}
+
+\subsubsection{Dataset Imbalance Drives Systematic Bias}
+
+\begin{itemize}
+    \item Surprise and, to a lesser extent, love have fewer training examples, causing:
+    \begin{itemize}
+        \item Weaker sentiment separation in embeddings
+        \item Misleading initial retrieval lists
+        \item RLHF unable to recover from poor candidate sets
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Acoustic Mismatch as a Source of Dissatisfaction}
+
+\begin{itemize}
+    \item Even when the lyrics match the emotion, users often reject:
+    \begin{itemize}
+        \item Overly high-energy tracks
+        \item Fast tempo
+        \item High loudness
+        \item ``Happy-sounding'' production on sad lyrics
+    \end{itemize}
+\end{itemize}
+This is clearly shown in negative drifts for energy/tempo/loudness (see Figure~\ref{fig:weight-vector}).
+
+\subsubsection{Adjacent Emotion Confusion}
+
+\begin{itemize}
+    \item Fear, surprise, and sometimes love get embedded near neighboring emotions, causing the retrieval list to drift toward semantically similar but not emotionally correct songs.
+\end{itemize}
+
+\subsection{Model Strengths and Weaknesses}
+
+\subsubsection{What the Model is Good At}
+
+\begin{itemize}
+    \item Strong separation of high-resource emotions (sadness, joy, anger).
+    \item Produces consistent, meaningful emotional embeddings that map cleanly onto lyrical content.
+    \item RLHF excels when acoustic cues meaningfully differentiate user preferences (e.g., low-energy grief songs).
+\end{itemize}
+
+\subsubsection{What the Model is Bad At}
+
+\begin{itemize}
+    \item Modeling fear and surprise, due to weak dataset representation and lack of corresponding mainstream songs.
+    \item Handling user intents that do not have clear acoustic or lyrical correlates in Spotify data.
+    \item Generating emotionally coherent recommendations when the initial Phase 1 list is off-target.
+\end{itemize}
+
+\subsection{Recommendations for Improvement}
+
+\subsubsection{Expand Emotion Training Data}
+\begin{itemize}
+    \item Add external fear/surprise data points to have a more evenly distributed split
+    \item Use data augmentation (sentence paraphrasing, contrastive learning)
+\end{itemize}
+
+\subsubsection{Expand Dataset with Genre-Specific Emotional Songs}
+\begin{itemize}
+    \item Fear/surprise often appear in niche genres (metal, experimental, cinematic scores); adding these improves representational grounding.
+\end{itemize}
+
+\subsubsection{Improve RLHF Exploration}
+\begin{itemize}
+    \item Use softmax choice modeling instead of hard A/B updates.
+    \item Introduce uncertainty-driven candidate sampling.
+\end{itemize}
+
+\vspace{1em}
+
+Overall, our error analysis shows that the two-stage system succeeds when emotional meaning and acoustic cues align, but struggles when either component begins from a weak foundation. In Phase 1, the emotion encoder reliably distinguishes common and well-represented emotions such as joy, sadness, and anger, but exhibits predictable confusion for low-resource categories like fear and surprise, where embeddings tend to drift toward semantically adjacent emotions. These misalignments propagate into Phase 2, shaping the initial candidate pool and limiting the RLHF reranker’s ability to correct poor emotional matches. When Phase 1 provides a strong emotional baseline, RLHF performs consistently well, as reflected in the rank-shift patterns and preference-vector trajectories (see Figures~\ref{fig:song-rank-rlhf} and~\ref{fig:weight-vector}), which show stable increases in features like acousticness and valence and strong penalties on tempo, loudness, and energy. This personalization is further corroborated by the user-study results (Table~\ref{tab:user-satisfaction-rlhf}), where most emotions, especially sadness, joy, love, and anger, show clear satisfaction gains after RLHF, while fear and surprise remain difficult due to the underlying dataset and embedding limitations. Taken together, the system demonstrates strong emotional grounding and meaningful personalization, but future work must address class imbalance, dataset coverage, and acoustic--emotional alignment to improve performance for harder, less musically represented emotions.
+
+\section*{Team Contributions}
+
+All team members collaborated closely across all stages of the project, from data preprocessing to model implementation and evaluation. Himanshu Singh focused primarily on data cleaning and pipeline setup, ensuring the merged Spotify datasets were ready for modeling. Muhammad Umar Khan led the integration of the DistilBERT-based emotion model and coordinated system design. Matthew Mark contributed to evaluation design, performance analysis, and visualization of results. Each member participated in writing the report and refining both preprocessing and modeling components through regular joint meetings and shared development sessions.
+% Bibliography entries for the entire Anthology, followed by custom entries
+%\bibliography{custom,anthology-overleaf-1,anthology-overleaf-2}
+
+% Custom bibliography entries only
+\bibliography{custom}
+
+% \appendix
+
+% \section{Example Appendix}
+% \label{sec:appendix}
+
+% This is an appendix.
+
+\end{document}
